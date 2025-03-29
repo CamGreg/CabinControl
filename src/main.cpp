@@ -4,6 +4,9 @@
 #include <WiFiClient.h>
 #include <WiFiAP.h>
 
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
 RTC_DATA_ATTR int64_t wifiTimer = 0; // decrement this while running, also decrement after sleep
 
 const char *ssid = "hello";
@@ -13,6 +16,10 @@ WiFiServer server(80);
 const auto sleepPeriod_ms = 10 * 60 * 1000; // 10 minutes
 const auto WAKEUP_GPIO = GPIO_NUM_10;
 const auto WiFi_GPIO = GPIO_NUM_10;
+
+const auto ONE_WIRE_BUS = GPIO_NUM_2;
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
 
 void handleClient(WiFiClient client);
 constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin);
@@ -64,7 +71,8 @@ void loop()
         SensorsTimer = millis();
 
         // Temperature
-        float temperature = 0;
+        sensors.requestTemperatures();
+        float temperature = sensors.getTempC(0, 2);
 
         // Charge controller stats
     }
