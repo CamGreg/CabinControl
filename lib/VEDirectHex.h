@@ -60,11 +60,16 @@ enum VEDirectAddresses
 uint32_t Get(Stream &serial, int16_t address, int8_t flags)
 {
     serial.print(F(":"));
-    serial.write(VEDirectCommands::get);
-    serial.write(address >> 8);
-    serial.write(address & 0xFF);
-    serial.write(flags);
-    serial.write(0x55);
+    serial.printf("", VEDirectCommands::get);
+    serial.printf("", address >> 8);
+    serial.printf("", address & 0xFF);
+    serial.printf("", flags);
+    uint8_t checksum = 0x55;
+    checksum -= VEDirectCommands::get; // TODO verify checksum
+    checksum -= address >> 8;
+    checksum -= address & 0xFF;
+    checksum -= flags;
+    serial.write(checksum);
     serial.println();
 
     // Read response
@@ -73,6 +78,8 @@ uint32_t Get(Stream &serial, int16_t address, int8_t flags)
     serial.readBytesUntil('\n', response, 33);
 
     // TODO Parse response
+
+    const uint8_t test = 58 + 55 + 70 + 48 + 69 + 68 + 48 + 48 + 55 + 49;
 
     return 0;
 }
