@@ -63,7 +63,7 @@ enum VeDirectHexRegister
 
 #define ascii2hex(v) (v - 48 - (v >= 'A' ? 7 : 0))
 #define hex2byte(b) (ascii2hex(*(b))) * 16 + ((ascii2hex(*(b + 1))))
-static uint8_t calcHexFrameCheckSum(const char *buffer, int size)
+static uint8_t calcHexFrameCheckSum(const char *buffer, const int size)
 {
     uint8_t checksum = 0x55 - ascii2hex(buffer[1]);
     for (int i = 2; i < size; i += 2)
@@ -71,9 +71,9 @@ static uint8_t calcHexFrameCheckSum(const char *buffer, int size)
     return (checksum);
 }
 
-String Int2HexLEString(uint32_t value, uint8_t anz)
+String Int2HexLEString(const uint32_t value, const uint8_t anz)
 {
-    char hexchar[] = "0123456789ABCDEF";
+    const char hexchar[] = "0123456789ABCDEF";
     char help[9] = {};
 
     switch (anz)
@@ -118,10 +118,17 @@ static uint32_t AsciiHexLE2Int(const char *ascii, const uint8_t anz)
     return (static_cast<uint32_t>(strtoul(help, nullptr, 16)));
 }
 
-bool sendHexCommand(Stream &serial, VeDirectHexCommand cmd, VeDirectHexRegister addr, uint32_t value, uint8_t valsize)
+enum valueSize : uint8_t
+{
+    _8 = 8,
+    _16 = 16,
+    _32 = 32,
+};
+
+bool sendHexCommand(Stream &serial, const VeDirectHexCommand cmd, const VeDirectHexRegister addr, const uint32_t value, const valueSize valsize)
 {
     bool sent = false;
-    uint8_t flags = 0x00; // always 0x00
+    const uint8_t flags = 0x00; // always 0x00
 
     String txData = ":" + Int2HexLEString(static_cast<uint32_t>(cmd), 1); // add the command nibble
 
@@ -186,7 +193,7 @@ struct VeDirectHexData
     char text[VE_MAX_HEX_LEN]; // text/string response
 };
 
-VeDirectHexData disassembleHexData(char buffer[VE_MAX_HEX_LEN])
+VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN])
 {
     auto len = strlen(buffer);
 
