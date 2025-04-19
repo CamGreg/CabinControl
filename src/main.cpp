@@ -7,6 +7,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+#include <display.h> // TODO: abstract display interface. WriteText(), Clear(), StatusEmoji(),Off() ect.
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -98,18 +99,23 @@ void loop()
         float temperature = sensors.getTempC(0, 2);
         digitalWrite(OneWire_Power_GPIO, LOW);
 
+	const auto interCharTimout =10; //uS
         // Charge controller stats
         digitalWrite(ChargeCtrl_Select1_GPIO, HIGH);
         // Read charge controller1 information
-        // Serial.write();
-        digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
+        // Serial.write():
+	// TODO: group update commands into a updateAll function
+	loadCurrent = GetValue(loadCurrent);
+	solarCurrent = GetValue()
+
+	digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
         digitalWrite(ChargeCtrl_Select2_GPIO, HIGH);
         // Read charge controller2 information
         // Serial.write();
         digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
-    }
 
-    // Screen Control
+	// TODO: get current off shunt sensor for AC load/generator
+    }
 
     // Wifi Control
     if (wifiTimer)
@@ -142,6 +148,15 @@ void loop()
     {
         digitalWrite(OLED_Power_GPIO, LOW);
     }
+//TODO abstract abovr to use disaply interface
+//{
+//Init()
+//writeText(powerStatus)
+//writeText(battey status)
+//} else {
+//off()
+//}
+
 
     // Sleep
     if (inactive)

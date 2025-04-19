@@ -244,4 +244,12 @@ VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN])
     return data;
 }
 
-#endif
+uint32_t GetValue(Stream &serial, VeDirectHexRegister){
+	sendHexCommand(serial, get, VeDirectHexRegister, 0, 0);
+	serial.setTimout(10);
+	const auto respBytes = serial.readUntil("\n");
+	const auto resp = dissasembleHexResponse(respBytes);
+	return resp.value;
+}
+
+#end
