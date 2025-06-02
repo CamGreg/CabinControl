@@ -193,11 +193,8 @@ struct VeDirectHexData
     char text[VE_MAX_HEX_LEN]; // text/string response
 };
 
-VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN])
+VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN], const int len)
 {
-    auto len = strlen(buffer);
-
-    // reset hex data first
     VeDirectHexData data = {};
 
     if ((len > 3) && (calcHexFrameCheckSum(buffer, len) == 0x00))
@@ -244,12 +241,14 @@ VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN])
     return data;
 }
 
-uint32_t GetValue(Stream &serial, VeDirectHexRegister){
-	sendHexCommand(serial, get, VeDirectHexRegister, 0, 0);
-	serial.setTimout(10);
-	const auto respBytes = serial.readUntil("\n");
-	const auto resp = dissasembleHexResponse(respBytes);
-	return resp.value;
+uint32_t GetValue(Stream &serial, VeDirectHexRegister address, valueSize size)
+{
+    sendHexCommand(serial, VeDirectHexCommand::get, address, 0, size);
+    serial.setTimeout(10);
+    char respBytes[VE_MAX_HEX_LEN] = {};
+    const auto size = serial.readBytesUntil('\n', respBytes, VE_MAX_HEX_LEN);
+    const auto resp = disassembleHexData(respBytes, size);
+    return resp.value;
 }
 
-#end
+#endif
