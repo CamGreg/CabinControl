@@ -7,12 +7,15 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#include <display.h> // TODO: abstract display interface. WriteText(), Clear(), StatusEmoji(),Off() ect.
+// #include <display.h> // TODO: abstract display interface. WriteText(), Clear(), StatusEmoji(),Off() ect.
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-const auto SDA = GPIO_NUM_0;
-const auto SCL = GPIO_NUM_0;
+
+#include <VEDirectHex.h>
+
+// const auto SDA = GPIO_NUM_0;
+// const auto SCL = GPIO_NUM_0;
 
 const auto SCREEN_WIDTH = 128; // OLED display width, in pixels
 const auto SCREEN_HEIGHT = 32; // OLED display height, in pixels
@@ -41,6 +44,10 @@ const auto ChargeCtrl_Select1_GPIO = GPIO_NUM_0;
 const auto ChargeCtrl_Select2_GPIO = GPIO_NUM_0;
 
 const auto OLED_Power_GPIO = GPIO_NUM_0;
+
+constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin);
+void handleClient(WiFiClient client);
+int64_t decrementTimer(int64_t timer, int64_t change);
 
 void setup()
 {
@@ -99,22 +106,22 @@ void loop()
         float temperature = sensors.getTempC(0, 2);
         digitalWrite(OneWire_Power_GPIO, LOW);
 
-	const auto interCharTimout =10; //uS
+        const auto interCharTimout = 10; // uS
         // Charge controller stats
         digitalWrite(ChargeCtrl_Select1_GPIO, HIGH);
         // Read charge controller1 information
         // Serial.write():
-	// TODO: group update commands into a updateAll function
-	loadCurrent = GetValue(loadCurrent);
-	solarCurrent = GetValue()
+        // TODO: group update commands into a updateAll function
+        auto loadCurrent = GetValue(Serial, VeDirectHexRegister::loadCurrent, valueSize::_32);
+        auto solarCurrent = GetValue(Serial, VeDirectHexRegister::chargeCurrent, valueSize::_32);
 
-	digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
+        digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
         digitalWrite(ChargeCtrl_Select2_GPIO, HIGH);
         // Read charge controller2 information
         // Serial.write();
         digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
 
-	// TODO: get current off shunt sensor for AC load/generator
+        // TODO: get current off shunt sensor for AC load/generator
     }
 
     // Wifi Control
@@ -148,15 +155,14 @@ void loop()
     {
         digitalWrite(OLED_Power_GPIO, LOW);
     }
-//TODO abstract abovr to use disaply interface
-//{
-//Init()
-//writeText(powerStatus)
-//writeText(battey status)
-//} else {
-//off()
-//}
-
+    // TODO abstract abovr to use disaply interface
+    //{
+    // Init()
+    // writeText(powerStatus)
+    // writeText(battey status)
+    // } else {
+    // off()
+    // }
 
     // Sleep
     if (inactive)

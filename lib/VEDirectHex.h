@@ -20,7 +20,7 @@ enum VeDirectHexCommand
     async = 0x0A,
 };
 
-enum VEDirectResponses
+enum class VEDirectResponses
 {
     done = 0x1,
     unknown = 0x3,
@@ -246,8 +246,8 @@ uint32_t GetValue(Stream &serial, VeDirectHexRegister address, valueSize size)
     sendHexCommand(serial, VeDirectHexCommand::get, address, 0, size);
     serial.setTimeout(10);
     char respBytes[VE_MAX_HEX_LEN] = {};
-    const auto size = serial.readBytesUntil('\n', respBytes, VE_MAX_HEX_LEN);
-    const auto resp = disassembleHexData(respBytes, size);
+    const auto length = serial.readBytesUntil('\n', respBytes, VE_MAX_HEX_LEN);
+    const auto resp = disassembleHexData(respBytes, length);
     return resp.value;
 }
 
