@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiAP.h>
+#include "ESPAsyncWebServer.h"
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -13,9 +14,7 @@
 #include <Adafruit_SSD1306.h>
 
 #include <VEDirectHex.h>
-
-// const auto SDA = GPIO_NUM_0;
-// const auto SCL = GPIO_NUM_0;
+const auto testing = true;
 
 const auto SCREEN_WIDTH = 128; // OLED display width, in pixels
 const auto SCREEN_HEIGHT = 32; // OLED display height, in pixels
@@ -27,8 +26,9 @@ RTC_DATA_ATTR int64_t wifiTimer = 0; // decrement this while running, also decre
 
 const char *ssid = "hello";
 const char *password = "12345678";
-WiFiServer server(80);
+// WiFiServer server(80);
 void handleClient(WiFiClient client);
+AsyncWebServer server(80);
 
 const auto sleepPeriod_ms = 10 * 60 * 1000; // 10 minutes
 const auto WAKEUP_GPIO = GPIO_NUM_10;
@@ -58,7 +58,7 @@ void setup()
     pinMode(ChargeCtrl_Select1_GPIO, OUTPUT);
     pinMode(ChargeCtrl_Select2_GPIO, OUTPUT);
 
-    if (digitalRead(WiFi_GPIO) == HIGH)
+    if (digitalRead(WiFi_GPIO) == HIGH || testing == true)
     {
         wifiTimer = 16 * 60 * 60 * 1000; // 16 hours
     }
@@ -81,9 +81,12 @@ void setup()
             }
         }
         WiFi.setHostname("Cabin Control");
-        IPAddress myIP = WiFi.softAPIP();
-        Serial.print("AP IP address: ");
-        Serial.println(myIP);
+        WiFi.softAPIP();
+
+        server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
+                  { request->send_P(200, "text/plain", "hello"); });
+        server.on("/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
+                  { request->send_P(200, "text/plain", "there"); });
         server.begin();
     }
 
@@ -122,18 +125,6 @@ void loop()
         digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
 
         // TODO: get current off shunt sensor for AC load/generator
-    }
-
-    // Wifi Control
-    if (wifiTimer)
-    {
-        WiFiClient client = server.accept();
-
-        if (client)
-        {
-            handleClient(client);
-        }
-        // TODO: turn off wifi from user input
     }
 
     // OLED
