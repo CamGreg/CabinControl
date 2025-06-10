@@ -1,5 +1,8 @@
 #include <Arduino.h>
 
+#include <ESP32Time.h>
+ESP32Time rtc; // pass tz offset ins seconds to constructor
+
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
@@ -95,6 +98,26 @@ void setup()
                   { request->send_P(200, "text/plain", "hello"); });
         server.on("/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send_P(200, "text/plain", "there"); });
+        server.on("/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
+                  {
+            size_t count = request->params(); // TODO use params to set date and time
+            for (size_t i = 0; i < count; i++)
+            {
+                const AsyncWebParameter *p = request->getParam(i);
+                Serial.printf("PARAM[%u]: %s = %s\n", i, p->name().c_str(), p->value().c_str());
+            }
+
+            String who;
+            if (request->hasParam("who", true))
+            {
+                who = request->getParam("who", true)->value();
+            }
+            else
+            {
+                who = "No message sent";
+            }
+            request->send(200, "text/plain", "Time Set"); });
+
         server.begin();
     }
 
@@ -163,12 +186,15 @@ void loop()
             // TODO Delete the oldest file in the root directory
         }
 
-        File file = SD.open("/data{date}.txt");
+        auto fileName = ("/data" + rtc.getDate(false) + ".csv").c_str();
+        File file = SD.open(fileName);
         if (file.size() > 10)
         {
-            writeFile(SD, "/data{date}.txt", "Time,temp1,temp2,ect\n"); // TODO finish header
+            writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
         }
-        appendFile(SD, "/data{date}.txt", "{time},{temp1},{temp2},{ect}\n"); // TODO link variables
+
+        auto line = rtc.getTime() + "," + temperature1 + "," + temperature2 + "," + temperature3 + "\n";
+        appendFile(SD, fileName, line.c_str());
     }
 
     // OLED
