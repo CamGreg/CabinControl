@@ -1,5 +1,9 @@
 #include <Arduino.h>
 
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
+
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiAP.h>
@@ -45,9 +49,13 @@ const auto ChargeCtrl_Select2_GPIO = GPIO_NUM_0;
 
 const auto OLED_Power_GPIO = GPIO_NUM_0;
 
+const auto SD_CS = GPIO_NUM_0;
+
 constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin);
 void handleClient(WiFiClient client);
 int64_t decrementTimer(int64_t timer, int64_t change);
+void appendFile(fs::FS &fs, const char *path, const char *message);
+void writeFile(fs::FS &fs, const char *path, const char *message);
 
 void setup()
 {
@@ -90,7 +98,7 @@ void setup()
         server.begin();
     }
 
-    Wire.setPins(SDA, SCL);
+    Wire.begin();
 }
 
 void loop()
@@ -106,8 +114,13 @@ void loop()
         // Temperature
         digitalWrite(OneWire_Power_GPIO, HIGH);
         sensors.requestTemperatures();
-        float temperature = sensors.getTempC(0, 2);
+        float temperature1 = sensors.getTempCByIndex(0);
+        float temperature2 = sensors.getTempCByIndex(1);
+        float temperature3 = sensors.getTempCByIndex(2);
+        float temperature4 = sensors.getTempCByIndex(3);
+        float temperature5 = sensors.getTempCByIndex(4);
         digitalWrite(OneWire_Power_GPIO, LOW);
+        // TODO save values
 
         const auto interCharTimout = 10; // uS
         // Charge controller stats
@@ -125,6 +138,37 @@ void loop()
         digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
 
         // TODO: get current off shunt sensor for AC load/generator
+
+        SD.begin(SD_CS);
+        if (!SD.begin(SD_CS))
+        {
+            Serial.println("Card Mount Failed");
+            return;
+        }
+        uint8_t cardType = SD.cardType();
+        if (cardType == CARD_NONE)
+        {
+            Serial.println("No SD card attached");
+            return;
+        }
+        Serial.println("Initializing SD card...");
+        if (!SD.begin(SD_CS))
+        {
+            Serial.println("ERROR - SD card initialization failed!");
+            return; // init failed
+        }
+
+        if (SD.usedBytes() > SD.totalBytes() * .9)
+        {
+            // TODO Delete the oldest file in the root directory
+        }
+
+        File file = SD.open("/data{date}.txt");
+        if (file.size() > 10)
+        {
+            writeFile(SD, "/data{date}.txt", "Time,temp1,temp2,ect\n"); // TODO finish header
+        }
+        appendFile(SD, "/data{date}.txt", "{time},{temp1},{temp2},{ect}\n"); // TODO link variables
     }
 
     // OLED
@@ -195,4 +239,46 @@ int64_t decrementTimer(int64_t timer, int64_t change)
 {
     auto newtime = timer - change;
     return newtime > 0 ? newtime : 0;
+}
+
+void writeFile(fs::FS &fs, const char *path, const char *message)
+{
+    Serial.printf("Writing file: %s\n", path);
+
+    File file = fs.open(path, FILE_WRITE);
+    if (!file)
+    {
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+    if (file.print(message))
+    {
+        Serial.println("File written");
+    }
+    else
+    {
+        Serial.println("Write failed");
+    }
+    file.close();
+}
+
+void appendFile(fs::FS &fs, const char *path, const char *message)
+{
+    Serial.printf("Appending to file: %s\n", path);
+
+    File file = fs.open(path, FILE_APPEND);
+    if (!file)
+    {
+        Serial.println("Failed to open file for appending");
+        return;
+    }
+    if (file.print(message))
+    {
+        Serial.println("Message appended");
+    }
+    else
+    {
+        Serial.println("Append failed");
+    }
+    file.close();
 }
