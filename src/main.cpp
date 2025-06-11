@@ -29,13 +29,12 @@ const auto OLED_RESET = -1;    // Reset pin # (or -1 if sharing Arduino reset pi
 const auto refreshRate_ms = 1000 / 10;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-RTC_DATA_ATTR int64_t wifiTimer = 0; // decrement this while running, also decrement after sleep
-
 const char *ssid = "hello";
 const char *password = "12345678";
 // WiFiServer server(80);
 void handleClient(WiFiClient client);
 AsyncWebServer server(80);
+const auto WiFi_Hold_Time_ms = 16 * 60 * 60 * 1000; // 16 hours
 
 const auto sleepPeriod_ms = 10 * 60 * 1000; // 10 minutes
 const auto WAKEUP_GPIO = GPIO_NUM_10;
@@ -69,20 +68,33 @@ void setup()
     pinMode(ChargeCtrl_Select1_GPIO, OUTPUT);
     pinMode(ChargeCtrl_Select2_GPIO, OUTPUT);
 
-    if (digitalRead(WiFi_GPIO) == HIGH || testing == true)
-    {
-        wifiTimer = 16 * 60 * 60 * 1000; // 16 hours
-    }
-    else if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_GPIO)
-    {
-        wifiTimer = decrementTimer(wifiTimer, sleepPeriod_ms);
-    }
-
     // serial
     Serial.begin(19200, SERIAL_8N1); // input serial port (VE device)
     Serial.flush();
 
-    if (wifiTimer)
+    Wire.begin();
+}
+
+void loop()
+{
+    static bool active = false || testing == true;
+    static auto inactiveTimer = millis();
+    if (digitalRead(WAKEUP_GPIO) == HIGH)
+    {
+        inactiveTimer = millis();
+        active = true;
+    }
+    else if (millis() - inactiveTimer > 10 * 1000)
+    {
+        active = false;
+    }
+
+    static auto wifiTimer = millis() + WiFi_Hold_Time_ms; // off by default
+    if (digitalRead(WiFi_GPIO) == HIGH || testing == true)
+    {
+        wifiTimer = millis();
+    }
+    if (millis() - wifiTimer < WiFi_Hold_Time_ms && WiFi.getMode() == WIFI_OFF) // init Wifi
     {
         if (!WiFi.softAP(ssid, password))
         {
@@ -119,23 +131,6 @@ void setup()
             request->send(200, "text/plain", "Time Set"); });
 
         server.begin();
-    }
-
-    Wire.begin();
-}
-
-void loop()
-{
-    static bool active = false || testing == true;
-    static auto inactiveTimer = millis();
-    if (digitalRead(WAKEUP_GPIO) == HIGH)
-    {
-        inactiveTimer = millis();
-        active = true;
-    }
-    else if (millis() - inactiveTimer > 10 * 1000)
-    {
-        active = false;
     }
 
     // Get data from sensors
@@ -248,13 +243,14 @@ void loop()
     // off()
     // }
 
-    static auto runtimeTracker = millis();
-    wifiTimer = decrementTimer(wifiTimer, runtimeTracker - millis());
-    runtimeTracker = millis();
-
     // Sleep
-    if (!active)
+    if (!active && millis() - wifiTimer < WiFi_Hold_Time_ms)
     {
+        if (WiFi.getMode() != WIFI_OFF)
+        {
+            WiFi.softAPdisconnect(true);
+        }
+
         // https://randomnerdtutorials.com/esp32-deep-sleep-arduino-ide-wake-up-sources/
         esp_sleep_enable_timer_wakeup(sleepPeriod_ms * 1000);
         esp_deep_sleep_enable_gpio_wakeup(BUTTON_PIN_BITMASK(WAKEUP_GPIO), ESP_GPIO_WAKEUP_GPIO_HIGH);
