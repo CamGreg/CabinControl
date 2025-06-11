@@ -181,14 +181,37 @@ void loop()
             return; // init failed
         }
 
-        if (SD.usedBytes() > SD.totalBytes() * .9)
+        if (SD.usedBytes() > SD.totalBytes() * .9) // housekeeping, delete "oldest" file
         {
-            // TODO Delete the oldest file in the root directory
+            auto timeData = rtc.getTimeStruct();
+            char newDateBuffer[32];
+            String fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv");
+            while (SD.exists(fileName))
+            {
+                timeData.tm_mday--;
+                mktime(&timeData);                                                     // normalizes time data so day rolls over
+                strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
+
+                fileName = "/data/";
+                fileName += newDateBuffer;
+                fileName += ".csv";
+            }
+            timeData.tm_mday++;
+            mktime(&timeData);                                                     // normalizes time data so day rolls over
+            strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
+
+            fileName = "/data/";
+            fileName += newDateBuffer;
+            fileName += ".csv";
+
+            if (SD.exists(fileName))
+            {
+                SD.remove(fileName);
+            }
         }
 
-        auto fileName = ("/data" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
-        File file = SD.open(fileName);
-        if (file.size() > 10)
+        auto fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
+        if (SD.exists(fileName))
         {
             writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
         }
