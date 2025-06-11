@@ -73,7 +73,7 @@ void setup()
     {
         wifiTimer = 16 * 60 * 60 * 1000; // 16 hours
     }
-    else if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO)
+    else if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_GPIO)
     {
         wifiTimer = decrementTimer(wifiTimer, sleepPeriod_ms);
     }
@@ -95,9 +95,9 @@ void setup()
         WiFi.softAPIP();
 
         server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
-                  { request->send_P(200, "text/plain", "hello"); });
+                  { request->send(200, "text/plain", "hello"); });
         server.on("/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
-                  { request->send_P(200, "text/plain", "there"); });
+                  { request->send(200, "text/plain", "there"); });
         server.on("/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
                   {
             size_t count = request->params(); // TODO use params to set date and time
@@ -126,7 +126,17 @@ void setup()
 
 void loop()
 {
-    static bool inactive = false;
+    static bool active = false || testing == true;
+    static auto inactiveTimer = millis();
+    if (digitalRead(WAKEUP_GPIO) == HIGH)
+    {
+        inactiveTimer = millis();
+        active = true;
+    }
+    else if (millis() - inactiveTimer > 10 * 1000)
+    {
+        active = false;
+    }
 
     // Get data from sensors
     static auto SensorsTimer = millis();
@@ -140,8 +150,8 @@ void loop()
         float temperature1 = sensors.getTempCByIndex(0);
         float temperature2 = sensors.getTempCByIndex(1);
         float temperature3 = sensors.getTempCByIndex(2);
-        float temperature4 = sensors.getTempCByIndex(3);
-        float temperature5 = sensors.getTempCByIndex(4);
+        // float temperature4 = sensors.getTempCByIndex(3);
+        // float temperature5 = sensors.getTempCByIndex(4);
         digitalWrite(OneWire_Power_GPIO, LOW);
         // TODO save values
 
@@ -162,67 +172,54 @@ void loop()
 
         // TODO: get current off shunt sensor for AC load/generator
 
-        SD.begin(SD_CS);
-        if (!SD.begin(SD_CS))
+        if (SD.begin(SD_CS) && SD.cardType() != CARD_NONE)
         {
-            Serial.println("Card Mount Failed");
-            return;
-        }
-        uint8_t cardType = SD.cardType();
-        if (cardType == CARD_NONE)
-        {
-            Serial.println("No SD card attached");
-            return;
-        }
-        Serial.println("Initializing SD card...");
-        if (!SD.begin(SD_CS))
-        {
-            Serial.println("ERROR - SD card initialization failed!");
-            return; // init failed
-        }
-
-        if (SD.usedBytes() > SD.totalBytes() * .9) // housekeeping, delete "oldest" file
-        {
-            auto timeData = rtc.getTimeStruct();
-            char newDateBuffer[32];
-            String fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv");
-            while (SD.exists(fileName))
+            if (SD.usedBytes() > SD.totalBytes() * .9) // housekeeping, delete "oldest" file
             {
-                timeData.tm_mday--;
+                auto timeData = rtc.getTimeStruct();
+                char newDateBuffer[32];
+                String fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv");
+
+                int limiter = 2000; // ~6 years
+                while (SD.exists(fileName) && limiter--)
+                {
+                    timeData.tm_mday--;
+                    mktime(&timeData);                                                     // normalizes time data so day rolls over
+                    strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
+
+                    fileName = "/data/";
+                    fileName += newDateBuffer;
+                    fileName += ".csv";
+                }
+                timeData.tm_mday++;
                 mktime(&timeData);                                                     // normalizes time data so day rolls over
                 strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
 
                 fileName = "/data/";
                 fileName += newDateBuffer;
                 fileName += ".csv";
+
+                if (SD.exists(fileName))
+                {
+                    SD.remove(fileName);
+                }
             }
-            timeData.tm_mday++;
-            mktime(&timeData);                                                     // normalizes time data so day rolls over
-            strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
 
-            fileName = "/data/";
-            fileName += newDateBuffer;
-            fileName += ".csv";
-
+            auto fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
             if (SD.exists(fileName))
             {
-                SD.remove(fileName);
+                writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
             }
-        }
 
-        auto fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
-        if (SD.exists(fileName))
-        {
-            writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
+            auto line = rtc.getTime() + "," + temperature1 + "," + temperature2 + "," + temperature3 + "\n";
+            appendFile(SD, fileName, line.c_str());
+            SD.end();
         }
-
-        auto line = rtc.getTime() + "," + temperature1 + "," + temperature2 + "," + temperature3 + "\n";
-        appendFile(SD, fileName, line.c_str());
     }
 
     // OLED
     static auto refreshTimer = millis();
-    if (digitalRead(WAKEUP_GPIO) == HIGH && millis() - refreshTimer > refreshRate_ms)
+    if (active && millis() - refreshTimer > refreshRate_ms)
     {
         refreshTimer = millis();
         digitalWrite(OLED_Power_GPIO, HIGH);
@@ -235,21 +232,28 @@ void loop()
         display.println(F("Text"));
         display.display();
     }
-    else if (digitalRead(WAKEUP_GPIO) == LOW) // turn off OLED
+    else if (!active) // turn off OLED
     {
         digitalWrite(OLED_Power_GPIO, LOW);
     }
-    // TODO abstract abovr to use disaply interface
+    // TODO abstract above to use display interface
     //{
     // Init()
-    // writeText(powerStatus)
-    // writeText(battey status)
+    // writeText(solar status)
+    // writeText(wheel status)
+    // writeText(battery status)
+    // writeText(Load status)
+    // summery emoticon
     // } else {
     // off()
     // }
 
+    static auto runtimeTracker = millis();
+    wifiTimer = decrementTimer(wifiTimer, runtimeTracker - millis());
+    runtimeTracker = millis();
+
     // Sleep
-    if (inactive)
+    if (!active)
     {
         // https://randomnerdtutorials.com/esp32-deep-sleep-arduino-ide-wake-up-sources/
         esp_sleep_enable_timer_wakeup(sleepPeriod_ms * 1000);
