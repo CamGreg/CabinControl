@@ -186,7 +186,7 @@ void loop()
             // TODO Delete the oldest file in the root directory
         }
 
-        auto fileName = ("/data" + rtc.getDate(false) + ".csv").c_str();
+        auto fileName = ("/data" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
         File file = SD.open(fileName);
         if (file.size() > 10)
         {
