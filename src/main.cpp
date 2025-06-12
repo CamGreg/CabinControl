@@ -55,7 +55,6 @@ const auto SD_CS = GPIO_NUM_0;
 
 constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin);
 void handleClient(WiFiClient client);
-int64_t decrementTimer(int64_t timer, int64_t change);
 void appendFile(fs::FS &fs, const char *path, const char *message);
 void writeFile(fs::FS &fs, const char *path, const char *message);
 
@@ -89,12 +88,12 @@ void loop()
         active = false;
     }
 
-    static auto wifiTimer = millis() + WiFi_Hold_Time_ms; // off by default
+    static auto wifiTimer = 0; // off by default
     if (digitalRead(WiFi_GPIO) == HIGH || testing == true)
     {
         wifiTimer = millis();
     }
-    if (millis() - wifiTimer < WiFi_Hold_Time_ms && WiFi.getMode() == WIFI_OFF) // init Wifi
+    if (wifiTimer && WiFi.getMode() == WIFI_OFF) // init Wifi
     {
         if (!WiFi.softAP(ssid, password))
         {
@@ -244,7 +243,7 @@ void loop()
     // }
 
     // Sleep
-    if (!active && millis() - wifiTimer < WiFi_Hold_Time_ms)
+    if (!active && (!wifiTimer || millis() - wifiTimer > WiFi_Hold_Time_ms))
     {
         if (WiFi.getMode() != WIFI_OFF)
         {
@@ -282,12 +281,6 @@ void handleClient(WiFiClient client)
     }
     client.stop();
     Serial.println("Client Disconnected.");
-}
-
-int64_t decrementTimer(int64_t timer, int64_t change)
-{
-    auto newtime = timer - change;
-    return newtime > 0 ? newtime : 0;
 }
 
 void writeFile(fs::FS &fs, const char *path, const char *message)
