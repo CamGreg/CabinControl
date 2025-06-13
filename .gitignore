@@ -3,3 +3,21 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Frontend
+frontend_build
+frontend/node_modules
+
+# Logs
+frontend/logs
+*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+frontend/dist
+frontend/dist-ssr
+*.local
+

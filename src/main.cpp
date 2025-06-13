@@ -113,14 +113,14 @@ void loop()
 
         if (SD.begin(SD_CS) && SD.cardType() != CARD_NONE)
         {
-            server.serveStatic("/static/", SD, "/").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
+            server.serveStatic("/", SD, "/").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
             server.serveStatic("/data/", SD, "/data/").setCacheControl(("public, max-age=" + String(60 * 60 * 3) /*3 hours*/).c_str());
         }
-        server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
+        server.on("/api/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send(200, "text/plain", "hello"); });
-        server.on("/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
+        server.on("/api/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send(200, "text/plain", "there"); });
-        server.on("/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
+        server.on("/api/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
                   {
             size_t count = request->params(); // TODO use params to set date and time
             for (size_t i = 0; i < count; i++)
@@ -230,7 +230,7 @@ void loop()
                 writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
             }
 
-            auto line = rtc.getTime() + "," + temperature1 + "," + temperature2 + "," + temperature3 + "\n";
+            auto line = rtc.getDateTime() + "," + String(temperature1, 0) + "," + String(temperature2, 0) + "," + String(temperature3, 0) + "\n";
             appendFile(SD, fileName, line.c_str());
             SD.end();
         }
