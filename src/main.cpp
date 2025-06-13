@@ -184,7 +184,7 @@ void loop()
                 timeData.tm_mday--;
                 mktime(&timeData);
                 char newDateBuffer[32];
-                String fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv.gz");
+                String fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv.gz");
                 if (SD.exists(fileName))
                 {
                     if (gzipFile(fileName.c_str(), (fileName + ".gz").c_str()))
@@ -197,22 +197,22 @@ void loop()
             {
                 auto timeData = rtc.getTimeStruct();
                 char newDateBuffer[32];
-                String fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv.gz");
+                String fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv.gz");
 
                 int limiter = 2000; // ~6 years
                 while (SD.exists(fileName) && limiter--)
                 {
                     timeData.tm_mday--;
-                    mktime(&timeData);                                                     // normalizes time data so day rolls over
-                    strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
+                    mktime(&timeData);                                                  // normalizes time data so day rolls over
+                    strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
 
                     fileName = "/data/";
                     fileName += newDateBuffer;
                     fileName += ".csv.gz";
                 }
                 timeData.tm_mday++;
-                mktime(&timeData);                                                     // normalizes time data so day rolls over
-                strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m-%d", &timeData); // formats date into buffer
+                mktime(&timeData);                                                  // normalizes time data so day rolls over
+                strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
 
                 fileName = "/data/";
                 fileName += newDateBuffer;
@@ -224,7 +224,7 @@ void loop()
                 }
             }
 
-            auto fileName = ("/data/" + rtc.getTime("%Y-%m-%d") + ".csv").c_str();
+            auto fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv").c_str();
             if (SD.exists(fileName))
             {
                 writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
