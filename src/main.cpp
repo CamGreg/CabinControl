@@ -111,7 +111,7 @@ void loop()
         WiFi.setHostname("Cabin Control");
         WiFi.softAPIP();
 
-        if (SD.begin(SD_CS) && SD.cardType() != CARD_NONE)
+        if (SD.begin(SD_CS, SPI, 20000000) && SD.cardType() != CARD_NONE)
         {
             server.serveStatic("/", SD, "/").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
             server.serveStatic("/data/", SD, "/data/").setCacheControl(("public, max-age=" + String(60 * 60 * 3) /*3 hours*/).c_str());
@@ -177,7 +177,7 @@ void loop()
 
         // TODO: get current off shunt sensor for AC load/generator
 
-        if (SD.begin(SD_CS) && SD.cardType() != CARD_NONE)
+        if (SD.begin(SD_CS, SPI, 20000000) && SD.cardType() != CARD_NONE)
         {
             { // Compress data files. TODO check this works
                 auto timeData = rtc.getTimeStruct();

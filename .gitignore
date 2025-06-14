@@ -21,3 +21,8 @@ frontend/dist
 frontend/dist-ssr
 *.local
 
+# Schematic
+schematic/*bak
+schematic/~*
+schematic/*.lck
+schematic/schematic-backups
