@@ -181,7 +181,7 @@ void loop()
         {
             { // Compress data files. TODO check this works
                 auto timeData = rtc.getTimeStruct();
-                timeData.tm_mday--;
+                timeData.tm_mmonth--;
                 mktime(&timeData);
                 char newDateBuffer[32];
                 String fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv.gz");
@@ -202,7 +202,7 @@ void loop()
                 int limiter = 2000; // ~6 years
                 while (SD.exists(fileName) && limiter--)
                 {
-                    timeData.tm_mday--;
+                    timeData.tm_mmonth--;
                     mktime(&timeData);                                                  // normalizes time data so day rolls over
                     strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
 
@@ -210,7 +210,7 @@ void loop()
                     fileName += newDateBuffer;
                     fileName += ".csv.gz";
                 }
-                timeData.tm_mday++;
+                timeData.tm_mmonth++;
                 mktime(&timeData);                                                  // normalizes time data so day rolls over
                 strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
 
