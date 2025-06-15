@@ -31,6 +31,13 @@ function updateBatteryPercentage(percentage: number) {
     }
   }
 }
+type myDataSet = {
+  label: string;
+  backgroundColor: string;
+  borderColor: string;
+  data: any[];
+  yAxisID: string;
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   const currentMonthDisplay = document.getElementById("current-month-display");
@@ -82,27 +89,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const config = {
       type: "line",
       data: {
-        datasets: [] as any[],
+        datasets: [] as myDataSet[],
       },
       options: {
         // parsing: false,
         spanGaps: true,
         animation: false,
         responsive: true,
-        // need custom "x axis" type mode for our purposes https://www.chartjs.org/docs/latest/configuration/interactions.html#custom-interaction-modes
-        // interaction: {
-        //     mode: 'x',
-        //     intersect: false,
-        //     axis: 'x',
-        //     includeInvisible: true
-        // },
-        // transitions: {
-        //     zoom: {
-        //         animation: {
-        //             duration: 0
-        //         }
-        //     }
-        // },
         datasets: {
           line: {
             pointRadius: 0, // disable for all `'line'` datasets
@@ -112,6 +105,8 @@ document.addEventListener("DOMContentLoaded", () => {
         plugins: {
           legend: {
             position: "bottom",
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             onClick: function (event: any, legendItem: any, legend: any) {
               // eslint-disable-next-line @typescript-eslint/ban-ts-comment
               // @ts-ignore
@@ -160,9 +155,11 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         scales: {
           x: {
+            display: true,
             position: "bottom",
             type: "time",
             ticks: {
+              source: "auto",
               autoSkip: true,
               autoSkipPadding: 50,
               maxRotation: 0,
@@ -251,105 +248,73 @@ function ParseLogs(rawCSV: string, chart: Chart) {
     })
     .map((line) => line.trim().toLowerCase().split(","));
 
-  {
-    // generic logfile.
-    for (var scale in chart.config.options?.scales) {
-      let scaleValue = chart.config.options.scales[scale];
-      if (scaleValue == null) {
-        continue;
-      }
-      // if (scaleValue.position == "bottom") {
-      //   continue;
-      // }
-      scaleValue.display = false;
-      delete scaleValue.min;
-      delete scaleValue.max;
-    }
+  function newDataSet(label: string, color: string, yAxis: string): myDataSet {
+    return {
+      label: label,
+      backgroundColor: color,
+      borderColor: color,
+      data: [] as any[],
+      yAxisID: yAxis,
+    };
+  }
 
-    type myDataSet = {
-      label: string;
-      backgroundColor: string;
-      borderColor: string;
-      data: any[];
-      yAxisID: string;
+  let newDatasets = [] as myDataSet[];
+  let availibleColors = [
+    "yellow",
+    "red",
+    "cyan",
+    "darkorange",
+    "cornflowerblue",
+    "lime",
+    "magenta",
+    "whitesmoke",
+    "steelblue",
+    "lightsteelblue",
+  ];
+  for (let index = 1; index < HeaderLine.length; index++) {
+    // not a standard dataset
+    const DataColor =
+      availibleColors.length > 0
+        ? (availibleColors.pop() as string)
+        : "rgb(" +
+          Math.round(Math.random() * 255) +
+          "," +
+          Math.round(Math.random() * 255) +
+          "," +
+          Math.round(Math.random() * 255) +
+          ")";
+    newDatasets.push(
+      newDataSet(
+        HeaderLine[index],
+        DataColor,
+        HeaderLine[index].substring(0, 5),
+      ),
+    );
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    chart.config.options[HeaderLine[index].substring(0, 5)] = {
+      display: true,
+      position: "right",
+      ticks: { color: DataColor, maxRotation: 0 },
+      grid: { drawOnChartArea: false },
     };
 
-    function newDataSet(
-      label: string,
-      color: string,
-      yAxis: string,
-    ): myDataSet {
-      return {
-        label: label,
-        backgroundColor: color,
-        borderColor: color,
-        data: [] as any[],
-        yAxisID: yAxis,
-      };
-    }
-
-    let newDatasets = [] as myDataSet[];
-    let availibleColors = [
-      "yellow",
-      "red",
-      "cyan",
-      "darkorange",
-      "cornflowerblue",
-      "lime",
-      "magenta",
-      "whitesmoke",
-      "steelblue",
-      "lightsteelblue",
-    ];
-    for (let index = 1; index < HeaderLine.length; index++) {
-      // not a standard dataset
-      const DataColor =
-        availibleColors.length > 0
-          ? (availibleColors.pop() as string)
-          : "rgb(" +
-            Math.round(Math.random() * 255) +
-            "," +
-            Math.round(Math.random() * 255) +
-            "," +
-            Math.round(Math.random() * 255) +
-            ")";
-      newDatasets.push(
-        newDataSet(
-          HeaderLine[index],
-          DataColor,
-          HeaderLine[index].substring(0, 5),
-        ),
-      );
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      chart.config.options[HeaderLine[index].substring(0, 5)] = {
-        display: true,
-        position: "right",
-        ticks: { color: DataColor, maxRotation: 0 },
-        grid: { drawOnChartArea: false },
-      };
-
-      data.forEach((line, _) => {
-        newDatasets[newDatasets.length - 1].data.push({
-          x: Date.parse(line[0]),
-          y: Number(line[index].replace(/[^0-9.]/g, "")),
-        });
+    data.forEach((line, _) => {
+      newDatasets[newDatasets.length - 1].data.push({
+        x: Date.parse(line[0]),
+        y: Number(line[index].replace(/[^0-9.]/g, "")),
       });
+    });
 
-      // newDatasets[newDatasets.length - 1].data = DecimateData(
-      //   newDatasets[newDatasets.length - 1].data,
-      // );
-
-      if (chart.config.options?.scales?.x != null) {
-        chart.config.options.scales.x.min = newDatasets[0].data[0].x;
-        chart.config.options.scales.x.max =
-          newDatasets[0].data[newDatasets[0].data.length - 1].x;
-      }
+    if (chart.config.options?.scales?.x != null) {
+      chart.config.options.scales.x.min = newDatasets[0].data[0].x;
+      chart.config.options.scales.x.max =
+        newDatasets[0].data[newDatasets[0].data.length - 1].x;
     }
+  }
 
-    for (let set of newDatasets) {
-      chart.config.data.datasets.push(set as any);
-    }
+  for (let set of newDatasets) {
+    chart.config.data.datasets.push(set as any);
   }
 
   chart.update();
