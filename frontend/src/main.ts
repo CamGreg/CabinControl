@@ -1,192 +1,353 @@
-import './style.css'; // Your main CSS file
-import Chart from 'chart.js/auto'; // Import Chart.js
+import "./style.css";
+import Chart from "chart.js/auto";
+import zoomPlugin from "chartjs-plugin-zoom";
+import "chartjs-adapter-date-fns";
 
-document.addEventListener('DOMContentLoaded', () => {
-    const currentMonthDisplay = document.getElementById('current-month-display');
-    const chartCanvas = document.getElementById('myChart');
+Chart.register(zoomPlugin);
+Chart.defaults.color = "whitesmoke";
+Chart.defaults.borderColor = "gray";
+Chart.defaults.backgroundColor = "whitesmoke";
 
-    if (!chartCanvas) {
-        console.error('Chart canvas not found!');
-        return;
+// Placeholder for battery percentage update logic
+function updateBatteryPercentage(percentage: number) {
+  const batteryPercentageElement =
+    document.getElementById("battery-percentage");
+  if (batteryPercentageElement) {
+    batteryPercentageElement.innerText = percentage + "%";
+  }
+
+  const batteryLevelGroup = document.getElementById("battery-level");
+  if (batteryLevelGroup) {
+    const rectangles = batteryLevelGroup.getElementsByTagName("rect");
+    const numRectangles = rectangles.length;
+    const filledRectangles = Math.round(percentage / (100 / numRectangles));
+
+    for (let i = 0; i < numRectangles; i++) {
+      if (i < filledRectangles) {
+        rectangles[i].setAttribute("width", "8");
+      } else {
+        rectangles[i].setAttribute("width", "0");
+      }
     }
+  }
+}
 
-    const ctx = chartCanvas.getContext('2d');
-    let myChart; // To store chart instance for later updates/destruction
+document.addEventListener("DOMContentLoaded", () => {
+  const currentMonthDisplay = document.getElementById("current-month-display");
 
-    async function fetchCsvData() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
-
-        const filename = `${year}-${month}.csv`;
-        const csvUrl = `/data/${filename}`; // Matches your ESP32 endpoint
-
-        currentMonthDisplay.textContent = `${year}-${month}`;
-        console.log(`Fetching CSV from: ${csvUrl}`);
-
-        try {
-            const response = await fetch(csvUrl);
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error(`Log file not found for ${filename}.`);
-                }
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const csvText = await response.text();
-            console.log('CSV data fetched successfully.');
-            return parseCsv(csvText);
-
-        } catch (error) {
-            console.error("Could not fetch CSV data:", error);
-            alert(`Failed to load data: ${error.message || error}. Please ensure the ESP32 is running and the file exists.`);
-            return null;
-        }
+  const chartCanvas = document.getElementById("myChart") as HTMLCanvasElement;
+  if (chartCanvas === null) {
+    console.error("Chart canvas not found!");
+    return;
+  }
+  let myChart: Chart; // To store chart instance for later updates/destruction
+  async function fetchCsvData(): Promise<string | null> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0"); // Month is 0-indexed
+    const filename = `${year}-${month}.csv`;
+    const csvUrl = `/data/${filename}`; // Matches your ESP32 endpoint
+    if (currentMonthDisplay != null) {
+      currentMonthDisplay.textContent = `${year}-${month}`;
     }
-
-    function parseCsv(csvText: any) {
-        const lines = csvText.trim().split('\n');
-        if (lines.length < 2) {
-            console.warn("CSV data too short or empty after trimming.");
-            return { labels: [], data1: [], data2: [], data3: [] }; // Return empty data
+    console.log(`Fetching CSV from: ${csvUrl}`);
+    try {
+      const response = await fetch(csvUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Log file not found for ${filename}.`);
         }
-
-        const headers = lines[0].split(',');
-        // Assuming headers: Timestamp,Temperature,Humidity,Pressure
-        const timestampIndex = headers.indexOf('Timestamp');
-        const tempIndex = headers.indexOf('Temperature');
-        const humidityIndex = headers.indexOf('Humidity');
-        const pressureIndex = headers.indexOf('Pressure');
-
-        if (timestampIndex === -1 || tempIndex === -1 || humidityIndex === -1 || pressureIndex === -1) {
-            console.error("Missing expected headers in CSV.");
-            // Handle missing headers gracefully, maybe alert user or use default indices
-            // For now, let's assume fixed indices if headers are missing for demo purposes
-            // (You should make this more robust in production)
-            // Or throw an error: throw new Error("CSV headers do not match expected format.");
-            return { labels: [], data1: [], data2: [], data3: [] };
-        }
-
-
-        const labels = [];
-        const temperatureData = [];
-        const humidityData = [];
-        const pressureData = [];
-
-        for (let i = 1; i < lines.length; i++) {
-            const parts = lines[i].split(',');
-            if (parts.length > Math.max(timestampIndex, tempIndex, humidityIndex, pressureIndex)) {
-                labels.push(parts[timestampIndex]);
-                temperatureData.push(parseFloat(parts[tempIndex]));
-                humidityData.push(parseFloat(parts[humidityIndex]));
-                pressureData.push(parseFloat(parts[pressureIndex]));
-            }
-        }
-        return {
-            labels: labels,
-            temperature: temperatureData,
-            humidity: humidityData,
-            pressure: pressureData
-        };
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const csvText = await response.text();
+      console.log("CSV data fetched successfully.");
+      return csvText;
+    } catch (error) {
+      console.error("Could not fetch CSV data:", error);
+      alert(
+        `Failed to load data: ${error}. Please ensure the ESP32 is running and the file exists.`,
+      );
+      return null;
     }
+  }
 
-    function renderChart(data) {
-        if (myChart) {
-            myChart.destroy(); // Destroy previous chart instance if it exists
-        }
+  function InitChart() {
+    if (myChart) {
+      myChart.destroy(); // Destroy previous chart instance if it exists
+    }
+    if (chartCanvas === null) {
+      console.error("Chart canvas not found!");
+      return;
+    }
+    const config = {
+      type: "line",
+      data: {
+        datasets: [] as any[],
+      },
+      options: {
+        // parsing: false,
+        spanGaps: true,
+        animation: false,
+        responsive: true,
+        // need custom "x axis" type mode for our purposes https://www.chartjs.org/docs/latest/configuration/interactions.html#custom-interaction-modes
+        // interaction: {
+        //     mode: 'x',
+        //     intersect: false,
+        //     axis: 'x',
+        //     includeInvisible: true
+        // },
+        // transitions: {
+        //     zoom: {
+        //         animation: {
+        //             duration: 0
+        //         }
+        //     }
+        // },
+        datasets: {
+          line: {
+            pointRadius: 0, // disable for all `'line'` datasets
+          },
+        },
+        stacked: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            // onClick: function (event, legendItem, legend) {
+            //   var ci = this.chart;
 
-        myChart = new Chart(ctx, {
-            type: 'line', // Or 'bar', 'scatter'
-            data: {
-                labels: data.labels, // Timestamps from CSV
-                datasets: [
-                    {
-                        label: 'Temperature (°C)',
-                        data: data.temperature,
-                        borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        tension: 0.1,
-                        fill: false
-                    },
-                    {
-                        label: 'Humidity (%)',
-                        data: data.humidity,
-                        borderColor: 'rgb(54, 162, 235)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        tension: 0.1,
-                        fill: false
-                    },
-                    {
-                        label: 'Pressure (hPa)',
-                        data: data.pressure,
-                        borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        tension: 0.1,
-                        fill: false,
-                        yAxisID: 'y1' // Use a secondary Y-axis for pressure if scales are very different
-                    }
-                ]
+            //   ci.data.datasets.forEach(function (e, i) {
+            //     var meta = ci.getDatasetMeta(i);
+
+            //     if (i === legendItem.datasetIndex) {
+            //       meta.hidden = !meta.hidden;
+            //       chart.config.options.scales[e.yAxisID].display = !meta.hidden;
+            //     }
+            //   });
+
+            //   ci.update();
+            // },
+          },
+          // title: {
+          //     display: false,
+          //     text: 'Industrial Plankton Log Viewer'
+          // },
+          zoom: {
+            limits: {
+              // y: { min: 'original', max: 'original' },
+              y: { min: 0 },
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false, // Important for controlling size with CSS
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Time'
-                        }
-                    },
-                    y: { // Primary Y-axis for Temperature and Humidity
-                        beginAtZero: false,
-                        title: {
-                            display: true,
-                            text: 'Value'
-                        }
-                    },
-                    y1: { // Secondary Y-axis for Pressure
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: {
-                            drawOnChartArea: false, // Only draw grid lines for the primary Y axis
-                        },
-                        title: {
-                            display: true,
-                            text: 'Pressure'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    },
-                    title: {
-                        display: true,
-                        text: 'Monthly Sensor Data Overview'
-                    }
-                }
-            }
-        });
+            pan: {
+              enabled: true,
+              mode: "xy",
+              overScaleMode: "xy",
+            },
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true,
+              },
+              mode: "xy",
+              overScaleMode: "xy",
+            },
+          },
+        },
+        scales: {
+          x: {
+            position: "bottom",
+            type: "time",
+            ticks: {
+              autoSkip: true,
+              autoSkipPadding: 50,
+              maxRotation: 0,
+              major: {
+                enabled: true,
+              },
+            },
+            time: {
+              displayFormats: {
+                hour: "HH:mm",
+                minute: "HH:mm",
+                second: "HH:mm:ss",
+              },
+            },
+          },
+        },
+      },
+    };
+
+    myChart = new Chart(chartCanvas, config as any);
+  }
+  // Initial data load and chart render
+  fetchCsvData().then((data) => {
+    if (data != null) {
+      InitChart();
+      ParseLogs(data, myChart);
+    } else {
+      console.warn("No data to render chart.");
+    }
+  });
+  // Optional: Auto-reload data periodically if logs are updated frequently
+  // setInterval(() => {
+  //     fetchCsvData().then(data => {
+  //         if (data && data.labels.length > 0) {
+  //             renderChart(data);
+  //         }
+  //     });
+  // }, 60000); // Reload every minute
+});
+
+// Example:  Assuming you have a function to fetch the battery percentage
+async function getBatteryPercentage(): Promise<number> {
+  return Math.floor(Math.random() * 100); // Mock data
+}
+
+async function updateBatteryDisplay() {
+  const batteryPercentage = await getBatteryPercentage();
+  updateBatteryPercentage(batteryPercentage);
+}
+
+// Call updateBatteryDisplay initially and then periodically
+updateBatteryDisplay();
+setInterval(updateBatteryDisplay, 5000); // Update every 5 seconds
+
+function ParseLogs(rawCSV: string, chart: Chart) {
+  let data = rawCSV
+    .split("\n")
+    .filter((line) => !line.startsWith("Event:"))
+    .filter((line) => !line.startsWith("Culture"))
+    .filter((line) => !line.startsWith("IP"))
+    .filter((line) => {
+      // Filter out weekly restarts, and weird dates (< 2000)
+      const TimeStamp = new Date(line.split(",")[0]);
+      return (
+        TimeStamp.getTime() > 0 &&
+        !(
+          ((TimeStamp.getHours() == 2 &&
+            (TimeStamp.getMinutes() == 0 ||
+              TimeStamp.getMinutes() == 1 ||
+              TimeStamp.getMinutes() == 2)) ||
+            (TimeStamp.getHours() == 1 && TimeStamp.getMinutes() == 59)) &&
+          line.includes("0,0,0,0,0,0,0")
+        )
+      );
+    })
+    .map((line) => line.replaceAll("\t", ","))
+    .map((line) => line.trim().toLowerCase().split(","));
+
+  const HeaderLine = data.shift(); //remove and save Header Line
+  if (HeaderLine == null) {
+    console.error("Header line not found!");
+    return;
+  }
+  const dateIndex = HeaderLine.findIndex(
+    (val) => val.includes("date") || val.includes("time"),
+  );
+  const temperatureIndex = HeaderLine.findIndex(
+    (val) => val.includes("temperature") && !val.includes("setpoint"),
+  );
+
+  {
+    // generic logfile.
+    for (var scale in chart.config.options?.scales) {
+      let scaleValue = chart.config.options.scales[scale];
+      if (scaleValue == null) {
+        continue;
+      }
+      // if (scaleValue.position == "bottom") {
+      //   continue;
+      // }
+      scaleValue.display = false;
+      delete scaleValue.min;
+      delete scaleValue.max;
     }
 
-    // Initial data load and chart render
-    fetchCsvData().then(data => {
-        if (data && data.labels.length > 0) {
-            renderChart(data);
-        } else {
-            console.warn("No data to render chart.");
-        }
-    });
+    type myDataSet = {
+      label: string;
+      backgroundColor: string;
+      borderColor: string;
+      data: any[];
+      yAxisID: string;
+    };
 
-    // Optional: Auto-reload data periodically if logs are updated frequently
-    // setInterval(() => {
-    //     fetchCsvData().then(data => {
-    //         if (data && data.labels.length > 0) {
-    //             renderChart(data);
-    //         }
-    //     });
-    // }, 60000); // Reload every minute
-});
+    function newDataSet(
+      label: string,
+      color: string,
+      yAxis: string,
+    ): myDataSet {
+      return {
+        label: label,
+        backgroundColor: color,
+        borderColor: color,
+        data: [] as any[],
+        yAxisID: yAxis,
+      };
+    }
+
+    let newDatasets = [] as myDataSet[];
+    let availibleColors = [
+      "yellow",
+      "red",
+      "cyan",
+      "darkorange",
+      "cornflowerblue",
+      "lime",
+      "magenta",
+      "whitesmoke",
+      "steelblue",
+      "lightsteelblue",
+    ];
+    for (let index = 1; index < HeaderLine.length; index++) {
+      // not a standard dataset
+      const DataColor =
+        availibleColors.length > 0
+          ? (availibleColors.pop() as string)
+          : "rgb(" +
+            Math.round(Math.random() * 255) +
+            "," +
+            Math.round(Math.random() * 255) +
+            "," +
+            Math.round(Math.random() * 255) +
+            ")";
+      newDatasets.push(
+        newDataSet(
+          HeaderLine[index],
+          DataColor,
+          HeaderLine[index].substring(0, 5),
+        ),
+      );
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      chart.config.options[HeaderLine[index].substring(0, 5)] = {
+        display: true,
+        position: "right",
+        ticks: { color: DataColor, maxRotation: 0 },
+        grid: { drawOnChartArea: false },
+      };
+
+      data.forEach((line, _) => {
+        newDatasets[newDatasets.length - 1].data.push({
+          x: Date.parse(line[0]),
+          y: Number(line[index].replace(/[^0-9.]/g, "")),
+        });
+      });
+
+      // newDatasets[newDatasets.length - 1].data = DecimateData(
+      //   newDatasets[newDatasets.length - 1].data,
+      // );
+
+      if (chart.config.options?.scales?.x != null) {
+        chart.config.options.scales.x.min = newDatasets[0].data[0].x;
+        chart.config.options.scales.x.max =
+          newDatasets[0].data[newDatasets[0].data.length - 1].x;
+      }
+    }
+
+    for (let set of newDatasets) {
+      chart.config.data.datasets.push(set as any);
+    }
+  }
+
+  chart.update();
+}

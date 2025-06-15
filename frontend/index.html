@@ -1,22 +1,61 @@
 <!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Dashboard</title>
+        <script
+            rel="preload"
+            type="module"
+            src="/src/main.ts"
+            as="script"
+        ></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.0/dist/chartjs-plugin-zoom.min.js"></script>
+    </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard</title>
-  <script rel="preload" type="module" src="/src/main.ts" as="script"></script>
-</head>
+    <body>
+        <div>haoisadhos</div>
 
-<body>
-  <div>haoisadhos </div>
+        <div
+            id="battery-indicator"
+            style="display: flex; align-items: center; margin-bottom: 10px"
+        >
+            <svg
+                width="80"
+                height="30"
+                viewBox="0 0 80 30"
+                style="border: 1px solid black"
+            >
+                <rect
+                    x="1"
+                    y="1"
+                    width="78"
+                    height="28"
+                    fill="white"
+                    stroke="black"
+                />
+                <rect x="78" y="8" width="2" height="14" fill="black" />
+                <g id="battery-level">
+                    <rect x="5" y="5" width="0" height="20" fill="green" />
+                    <rect x="15" y="5" width="0" height="20" fill="green" />
+                    <rect x="25" y="5" width="0" height="20" fill="green" />
+                    <rect x="35" y="5" width="0" height="20" fill="green" />
+                    <rect x="45" y="5" width="0" height="20" fill="green" />
+                    <rect x="55" y="5" width="0" height="20" fill="green" />
+                </g>
+            </svg>
+            <div id="battery-percentage">0%</div>
+        </div>
 
-  <div class="chart-container" style="position: relative; height:40vh; width:80vw;">
-    <canvas id="myChart"></canvas>
-  </div>
+        <div
+            class="chart-container"
+            style="position: relative; height: 40vh; width: 80vw"
+        >
+            <canvas id="myChart"></canvas>
+        </div>
 
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
-
+        <script type="module" src="/src/main.ts"></script>
+    </body>
 </html>
