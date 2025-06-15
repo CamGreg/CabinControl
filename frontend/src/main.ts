@@ -112,20 +112,25 @@ document.addEventListener("DOMContentLoaded", () => {
         plugins: {
           legend: {
             position: "bottom",
-            // onClick: function (event, legendItem, legend) {
-            //   var ci = this.chart;
+            onClick: function (event: any, legendItem: any, legend: any) {
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore
+              const ci = this.chart;
 
-            //   ci.data.datasets.forEach(function (e, i) {
-            //     var meta = ci.getDatasetMeta(i);
+              ci.data.datasets.forEach(function (e: any, i: any) {
+                var meta = ci.getDatasetMeta(i);
 
-            //     if (i === legendItem.datasetIndex) {
-            //       meta.hidden = !meta.hidden;
-            //       chart.config.options.scales[e.yAxisID].display = !meta.hidden;
-            //     }
-            //   });
+                if (i === legendItem.datasetIndex) {
+                  meta.hidden = !meta.hidden;
+                  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                  // @ts-ignore
+                  myChart.config.options.scales[e.yAxisID].display =
+                    !meta.hidden;
+                }
+              });
 
-            //   ci.update();
-            // },
+              ci.update();
+            },
           },
           // title: {
           //     display: false,
@@ -139,7 +144,7 @@ document.addEventListener("DOMContentLoaded", () => {
             pan: {
               enabled: true,
               mode: "xy",
-              overScaleMode: "xy",
+              scaleMode: "xy",
             },
             zoom: {
               wheel: {
@@ -149,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 enabled: true,
               },
               mode: "xy",
-              overScaleMode: "xy",
+              scaleMode: "xy",
             },
           },
         },
@@ -213,11 +218,22 @@ updateBatteryDisplay();
 setInterval(updateBatteryDisplay, 5000); // Update every 5 seconds
 
 function ParseLogs(rawCSV: string, chart: Chart) {
-  let data = rawCSV
+  let dataLines = rawCSV
     .split("\n")
+    .filter((line) => line.length > 0)
     .filter((line) => !line.startsWith("Event:"))
     .filter((line) => !line.startsWith("Culture"))
     .filter((line) => !line.startsWith("IP"))
+    .map((line) => line.replaceAll("\t", ","));
+
+  const HeaderLineString = dataLines.shift();
+  if (HeaderLineString == null) {
+    console.error("Header line not found!");
+    return;
+  }
+  const HeaderLine = HeaderLineString.trim().toLowerCase().split(",");
+
+  let data = dataLines
     .filter((line) => {
       // Filter out weekly restarts, and weird dates (< 2000)
       const TimeStamp = new Date(line.split(",")[0]);
@@ -233,20 +249,7 @@ function ParseLogs(rawCSV: string, chart: Chart) {
         )
       );
     })
-    .map((line) => line.replaceAll("\t", ","))
     .map((line) => line.trim().toLowerCase().split(","));
-
-  const HeaderLine = data.shift(); //remove and save Header Line
-  if (HeaderLine == null) {
-    console.error("Header line not found!");
-    return;
-  }
-  const dateIndex = HeaderLine.findIndex(
-    (val) => val.includes("date") || val.includes("time"),
-  );
-  const temperatureIndex = HeaderLine.findIndex(
-    (val) => val.includes("temperature") && !val.includes("setpoint"),
-  );
 
   {
     // generic logfile.
