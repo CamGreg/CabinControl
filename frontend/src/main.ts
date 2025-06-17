@@ -1,5 +1,5 @@
 import "./style.css";
-import Chart from "chart.js/auto";
+import Chart, { type Point } from "chart.js/auto";
 import zoomPlugin from "chartjs-plugin-zoom";
 import "chartjs-adapter-date-fns";
 
@@ -258,6 +258,31 @@ function ParseLogs(rawCSV: string, chart: Chart) {
     };
   }
 
+  function DecimateData(array: Point[]): Point[] {
+    let newArray = [array[0], array[1]];
+    let tempArray = [array[0]];
+
+    for (let i = 1; i < array.length - 1; i++) { // skip first and last
+      if (array[i - 1].y != array[i].y || array[i].y != array[i + 1].y) {
+        tempArray.push(array[i]);
+      }
+    }
+    tempArray.push(array[array.length - 1]); // add skipped last one for next processing step
+
+    const decimationCount = Math.round(tempArray.length / 20000) + 1
+    for (let i = 1; i < tempArray.length - 1; i++) {// skip first and last
+      if ((Math.abs(tempArray[i].y - tempArray[i + 1].y) > Math.abs(tempArray[i].y / 100))
+        || (Math.abs(tempArray[i - 1].y - tempArray[i].y) > Math.abs(tempArray[i].y / 100))
+        || i % decimationCount == 0
+      ) {
+        newArray.push(tempArray[i]);
+      }
+    }
+
+    newArray.push(array[array.length - 1]); // add skipped last one
+    return newArray
+  }
+
   let newDatasets = [] as myDataSet[];
   let availibleColors = [
     "yellow",
@@ -277,12 +302,12 @@ function ParseLogs(rawCSV: string, chart: Chart) {
       availibleColors.length > 0
         ? (availibleColors.pop() as string)
         : "rgb(" +
-          Math.round(Math.random() * 255) +
-          "," +
-          Math.round(Math.random() * 255) +
-          "," +
-          Math.round(Math.random() * 255) +
-          ")";
+        Math.round(Math.random() * 255) +
+        "," +
+        Math.round(Math.random() * 255) +
+        "," +
+        Math.round(Math.random() * 255) +
+        ")";
     newDatasets.push(
       newDataSet(
         HeaderLine[index],
@@ -314,6 +339,7 @@ function ParseLogs(rawCSV: string, chart: Chart) {
   }
 
   for (let set of newDatasets) {
+    set.data = DecimateData(set.data);
     chart.config.data.datasets.push(set as any);
   }
 

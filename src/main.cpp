@@ -4,7 +4,7 @@
 ESP32Time rtc; // pass tz offset ins seconds to constructor
 
 #include "FS.h"
-#include "SD.h"
+#include "SD.h" // if using SD_MMC supported esp32 then use SD_MMC.h, will require some changes to the code
 #include "SPI.h"
 
 #include <WiFi.h>
@@ -57,7 +57,7 @@ const auto ChargeCtrl_Select2_GPIO = GPIO_NUM_0;
 
 const auto OLED_Power_GPIO = GPIO_NUM_0;
 
-const auto SD_CS = GPIO_NUM_0;
+const auto SD_CS = GPIO_NUM_7;
 
 constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin);
 void handleClient(WiFiClient client);
@@ -113,7 +113,7 @@ void loop()
 
         if (SD.begin(SD_CS, SPI, 20000000) && SD.cardType() != CARD_NONE)
         {
-            server.serveStatic("/", SD, "/").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
+            server.serveStatic("/", SD, "/").setDefaultFile("index.html").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
             server.serveStatic("/data/", SD, "/data/").setCacheControl(("public, max-age=" + String(60 * 60 * 3) /*3 hours*/).c_str());
         }
         server.on("/api/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
