@@ -35,8 +35,8 @@ const auto OLED_RESET = -1;    // Reset pin # (or -1 if sharing Arduino reset pi
 const auto refreshRate_ms = 1000 / 10;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-const char *ssid = "hello";
-const char *password = "12345678";
+const char *ssid = "Thanksgiving-Cabin";
+const char *password = "stuandstuinc";
 // WiFiServer server(80);
 void handleClient(WiFiClient client);
 AsyncWebServer server(80);

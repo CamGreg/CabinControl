@@ -14,11 +14,13 @@
 
 - Housing x2: <https://www.digikey.ca/en/products/detail/jst-sales-america-inc/PHR-4/608606>
 - Crimps x8: <https://www.digikey.ca/en/products/detail/jst-sales-america-inc/SPH-002T-P0-5S/26216268>
-- Wire: Any old ethernet will do
+- Wire: Any ~24-30AWG really, ethernet is a good choice
 - Voltage shifter / serial selection:
+  - <https://www.digikey.ca/en/products/detail/nve-corp-isolation-products/IL-712-2E/964106>
   - <https://www.digikey.ca/en/products/detail/analog-devices-inc/ADUM1201ARZ-RL7/995629>
   - <https://www.digikey.ca/en/products/detail/skyworks-solutions-inc/SI8421BB-D-IS/2170663>
-
+    - <https://www.digikey.ca/en/products/detail/chip-quik-inc/PCB3005A1/5978207> Breakout board
+  
 ## Control
 
 - Screen: <https://www.digikey.ca/en/products/detail/adafruit-industries-llc/4440/10824271>
@@ -41,4 +43,6 @@
 
 ## Consider
 
-- <https://www.digikey.ca/en/products/detail/4d-systems-pty-ltd/GEN4-ESP32-24CT/21762978> EPS32 with integrated 2.4" color display, capacitive touch screen, and SD card interface
+- <https://www.digikey.ca/en/products/detail/4d-systems-pty-ltd/GEN4-ESP32-24CT/21762978> EPS32 with integrated 2.4" color display, capacitive touch screen, and SD card interface. Needs 5V power, might not be able to supply enough 3.3V power for peripherals (200mA should be fine).
+  - <https://mou.sr/44mVQJR> Pin breakout board
+  - <https://www.digikey.ca/short/t81hcwqj> Ribbon cable
