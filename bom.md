@@ -24,6 +24,7 @@
 ## Control
 
 - Screen: <https://www.digikey.ca/en/products/detail/adafruit-industries-llc/4440/10824271>
+  - <https://www.amazon.ca/Hosyond-320x480-Capacitive-Display-Mega2560/dp/B0CRGQN58D>
 - Mom Button x2 : <https://www.digikey.ca/en/products/detail/adam-tech/SW-PB1-1BS-A-PK1-A/15284468>
   - Screen
   - Wifi Toggle

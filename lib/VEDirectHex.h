@@ -30,7 +30,7 @@ enum class VEDirectResponses
     set = 0x8,
 };
 
-enum VeDirectHexRegister
+enum VeDirectHexRegister : uint16_t
 {
     chargeCurrent = 0xEDD7,
     chargeVoltage = 0xEDD5,
@@ -61,17 +61,25 @@ enum VeDirectHexRegister
 // :7F0ED009600DB\n   :[7][F0ED][00][9600][DB]\n
 // Value = 0x0096 = 15.0A
 
-#define ascii2hex(v) (v - 48 - (v >= 'A' ? 7 : 0))
-#define hex2byte(b) (ascii2hex(*(b))) * 16 + ((ascii2hex(*(b + 1))))
-static uint8_t calcHexFrameCheckSum(const char *buffer, const int size)
+static bool isHexDigit(char digit)
 {
-    uint8_t checksum = 0x55 - ascii2hex(buffer[1]);
-    for (int i = 2; i < size; i += 2)
-        checksum -= hex2byte(buffer + i);
-    return (checksum);
+    return (digit >= '0' && digit <= '9') || (digit >= 'A' && digit <= 'F');
 }
 
-String Int2HexLEString(const uint32_t value, const uint8_t anz)
+static uint8_t hexNibble(char digit)
+{
+    return digit <= '9' ? digit - '0' : digit - 'A' + 10;
+}
+
+static uint8_t calcHexFrameCheckSum(const char *buffer, const int size)
+{
+    uint8_t checksum = 0x55 - hexNibble(buffer[1]);
+    for (int i = 2; i < size; i += 2)
+        checksum -= (hexNibble(buffer[i]) << 4) | hexNibble(buffer[i + 1]);
+    return checksum;
+}
+
+inline String Int2HexLEString(const uint32_t value, const uint8_t anz)
 {
     const char hexchar[] = "0123456789ABCDEF";
     char help[9] = {};
@@ -125,7 +133,7 @@ enum valueSize : uint8_t
     _32 = 32,
 };
 
-bool sendHexCommand(Stream &serial, const VeDirectHexCommand cmd, const VeDirectHexRegister addr, const uint32_t value, const valueSize valsize)
+inline bool sendHexCommand(Stream &serial, const VeDirectHexCommand cmd, const VeDirectHexRegister addr, const uint32_t value, const valueSize valsize)
 {
     bool sent = false;
     const uint8_t flags = 0x00; // always 0x00
@@ -138,10 +146,10 @@ bool sendHexCommand(Stream &serial, const VeDirectHexCommand cmd, const VeDirect
     case Command::ping:
     case Command::version:
     case Command::id:
+    case Command::restart:
         sent = true;
         break;
     case Command::get:
-    case Command::async:
         txData += Int2HexLEString(static_cast<uint16_t>(addr), 4);
         txData += Int2HexLEString(flags, 2); // add the flags (2 nibble)
         sent = true;
@@ -165,10 +173,10 @@ bool sendHexCommand(Stream &serial, const VeDirectHexCommand cmd, const VeDirect
         // add the checksum (2 nibble)
         txData += Int2HexLEString(calcHexFrameCheckSum(txData.c_str(), txData.length()), 2);
         String send = txData + "\n"; // hex command end byte
-        serial.write(send.c_str(), send.length());
+        return serial.write(send.c_str(), send.length()) == send.length();
     }
 
-    return sent;
+    return false;
 }
 
 // Response
@@ -188,16 +196,25 @@ struct VeDirectHexData
     uint32_t value;           // integer value of register
     VeDirectHexRegister addr; // register address
     VeDirectHexResponse rsp;  // hex response code
-    // uint8_t flags;            // flags Do the flags do anything?
+    uint8_t flags;
+    uint8_t payloadBytes;
 
     char text[VE_MAX_HEX_LEN]; // text/string response
 };
 
-VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN], const int len)
+inline VeDirectHexData disassembleHexData(const char *buffer, const int len)
 {
     VeDirectHexData data = {};
 
-    if ((len > 3) && (calcHexFrameCheckSum(buffer, len) == 0x00))
+    if (len < 4 || len > VE_MAX_HEX_LEN || len % 2 != 0 || buffer[0] != ':')
+        return data;
+    for (int i = 1; i < len; ++i)
+    {
+        if (!isHexDigit(buffer[i]))
+            return data;
+    }
+
+    if (calcHexFrameCheckSum(buffer, len) == 0)
     {
         data.rsp = static_cast<VeDirectHexResponse>(AsciiHexLE2Int(buffer + 1, 1));
 
@@ -213,10 +230,11 @@ VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN], const int 
         case Response::GET:
         case Response::SET:
         case Response::ASYNC:
+            if (len < 10)
+                return {};
             data.addr = static_cast<VeDirectHexRegister>(AsciiHexLE2Int(buffer + 2, 4));
-
-            // future option: to analyse the flags here?
-            // data.flags = AsciiHexLE2Int(buffer + 6, 2);
+            data.flags = AsciiHexLE2Int(buffer + 6, 2);
+            data.payloadBytes = (len - 10) / 2;
 
             if (len == 12)
             { // 8bit value
@@ -234,21 +252,74 @@ VeDirectHexData disassembleHexData(const char buffer[VE_MAX_HEX_LEN], const int 
             }
             break;
         default:
-            break; // something went wrong
+            return {};
         }
     }
 
     return data;
 }
 
-uint32_t GetValue(Stream &serial, VeDirectHexRegister address, valueSize size)
+inline bool GetValue(Stream &serial, VeDirectHexRegister address, valueSize size, uint32_t &value)
 {
-    sendHexCommand(serial, VeDirectHexCommand::get, address, 0, size);
-    serial.setTimeout(10);
-    char respBytes[VE_MAX_HEX_LEN] = {};
-    const auto length = serial.readBytesUntil('\n', respBytes, VE_MAX_HEX_LEN);
-    const auto resp = disassembleHexData(respBytes, length);
-    return resp.value;
+    if (size != _8 && size != _16 && size != _32)
+        return false;
+
+    // Discard bytes buffered before this request, including replies from a previous poll.
+    for (int pending = serial.available(); pending > 0; --pending)
+        serial.read();
+    if (!sendHexCommand(serial, VeDirectHexCommand::get, address, 0, size))
+        return false;
+
+    constexpr uint32_t responseTimeoutMs = 50;
+    const uint32_t start = millis();
+    char frame[VE_MAX_HEX_LEN];
+    int length = 0;
+    while (static_cast<uint32_t>(millis() - start) < responseTimeoutMs)
+    {
+        const int byte = serial.read();
+        if (byte < 0)
+        {
+            delay(1);
+            continue;
+        }
+        if (byte == ':')
+        {
+            frame[0] = ':';
+            length = 1;
+            continue;
+        }
+        if (length == 0)
+            continue;
+        if (byte == '\n')
+        {
+            const auto response = disassembleHexData(frame, length);
+            length = 0;
+            if (response.rsp != VeDirectHexResponse::GET || response.addr != address)
+                continue;
+            if (response.flags != 0)
+                return false;
+            if (response.payloadBytes == size / 8)
+            {
+                value = response.value;
+                return true;
+            }
+            continue;
+        }
+        if (length == VE_MAX_HEX_LEN || !isHexDigit(byte))
+        {
+            length = 0;
+            continue;
+        }
+        frame[length++] = static_cast<char>(byte);
+    }
+    return false;
+}
+
+inline uint32_t GetValue(Stream &serial, VeDirectHexRegister address, valueSize size)
+{
+    uint32_t value = 0;
+    GetValue(serial, address, size, value);
+    return value;
 }
 
 #endif

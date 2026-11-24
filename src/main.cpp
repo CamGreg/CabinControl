@@ -24,7 +24,8 @@ bool gzipFile(const char *input_path, const char *output_path);
 // #include <display.h> // TODO: abstract display interface. WriteText(), Clear(), StatusEmoji(),Off() ect.
 #include <Wire.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+// #include <Adafruit_SSD1306.h>
+#include <GxEPD2_BW.h>
 
 #include <VEDirectHex.h>
 const auto testing = true;
@@ -33,7 +34,13 @@ const auto SCREEN_WIDTH = 128; // OLED display width, in pixels
 const auto SCREEN_HEIGHT = 32; // OLED display height, in pixels
 const auto OLED_RESET = -1;    // Reset pin # (or -1 if sharing Arduino reset pin)
 const auto refreshRate_ms = 1000 / 10;
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+// Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define EPD_CS 5   // Actually define these, this is just copy pasted
+#define EPD_DC 17  // Actually define these, this is just copy pasted
+#define EPD_RST 16 // Actually define these, this is just copy pasted
+#define EPD_BUSY 4 // Actually define these, this is just copy pasted
+GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> display(
+    GxEPD2_154_D67(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 const char *ssid = "Thanksgiving-Cabin";
 const char *password = "stuandstuinc";
@@ -74,7 +81,7 @@ void setup()
     pinMode(ChargeCtrl_Select2_GPIO, OUTPUT);
 
     // serial
-    Serial.begin(19200, SERIAL_8N1); // input serial port (VE device)
+    Serial.begin(19200, SERIAL_8N1); // Dedicated to VE.Direct frames
     Serial.flush();
 
     Wire.begin();
@@ -103,7 +110,6 @@ void loop()
     {
         if (!WiFi.softAP(ssid, password))
         {
-            Serial.println("Soft AP creation failed.");
             while (1)
             {
             }
@@ -122,12 +128,7 @@ void loop()
                   { request->send(200, "text/plain", "there"); });
         server.on("/api/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
                   {
-            size_t count = request->params(); // TODO use params to set date and time
-            for (size_t i = 0; i < count; i++)
-            {
-                const AsyncWebParameter *p = request->getParam(i);
-                Serial.printf("PARAM[%u]: %s = %s\n", i, p->name().c_str(), p->value().c_str());
-            }
+            // TODO use params to set date and time
 
             String who;
             if (request->hasParam("who", true))
@@ -166,8 +167,8 @@ void loop()
         // Read charge controller1 information
         // Serial.write():
         // TODO: group update commands into a updateAll function
-        auto loadCurrent = GetValue(Serial, VeDirectHexRegister::loadCurrent, valueSize::_32);
-        auto solarCurrent = GetValue(Serial, VeDirectHexRegister::chargeCurrent, valueSize::_32);
+        auto loadCurrent = GetValue(Serial, VeDirectHexRegister::loadCurrent, valueSize::_16);
+        auto solarCurrent = GetValue(Serial, VeDirectHexRegister::chargeCurrent, valueSize::_16);
 
         digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
         digitalWrite(ChargeCtrl_Select2_GPIO, HIGH);
@@ -241,15 +242,15 @@ void loop()
     if (active && millis() - refreshTimer > refreshRate_ms)
     {
         refreshTimer = millis();
-        digitalWrite(OLED_Power_GPIO, HIGH);
-        display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // configure display Voltage
-        display.clearDisplay();
-        // Write Charge status
-        display.setTextSize(2); // Draw 2X-scale text
-        display.setTextColor(WHITE);
-        display.setCursor(10, 0);
-        display.println(F("Text"));
-        display.display();
+        // digitalWrite(OLED_Power_GPIO, HIGH);
+        // display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // configure display Voltage
+        // display.clearDisplay();
+        // // Write Charge status
+        // display.setTextSize(2); // Draw 2X-scale text
+        // display.setTextColor(WHITE);
+        // display.setCursor(10, 0);
+        // display.println(F("Text"));
+        // display.display();
     }
     else if (!active) // turn off OLED
     {
@@ -289,7 +290,6 @@ constexpr uint64_t BUTTON_PIN_BITMASK(uint64_t pin)
 
 void handleClient(WiFiClient client)
 {
-    Serial.println("New Client.");
     while (client.connected())
     {
         if (client.available())
