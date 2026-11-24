@@ -1,347 +1,179 @@
 import "./style.css";
-import Chart, { type Point } from "chart.js/auto";
-import zoomPlugin from "chartjs-plugin-zoom";
-import "chartjs-adapter-date-fns";
 
-Chart.register(zoomPlugin);
-Chart.defaults.color = "whitesmoke";
-Chart.defaults.borderColor = "gray";
-Chart.defaults.backgroundColor = "whitesmoke";
+const groups: [string, string, string[], string[], number, boolean?][] = [
+  ["Solar power", "W", ["PPV", "H21", "H23"], ["Panel", "Peak today", "Peak yesterday"], 1],
+  ["Voltage", "V", ["V", "VPV"], ["Battery", "Panel"], .001],
+  ["Current", "A", ["I", "IL"], ["Battery", "Load"], .001],
+  ["Daily solar yield", "kWh", ["H20", "H22"], ["Today", "Yesterday"], .01],
+  ["Total solar yield", "kWh", ["H19"], ["Lifetime counter"], .01],
+  ["Temperature", "C", ["T1", "T2", "T3"], ["Sensor 1", "Sensor 2", "Sensor 3"], 1],
+  ["Charger state", "code", ["CS", "MPPT", "LOAD"], ["Charge stage", "MPPT mode", "Load output"], 1, true],
+  ["Charger errors", "code", ["ERR"], ["Error"], 1, true],
+];
+const colors = ["#f8c462", "#65dfbd", "#a9bafe"];
+const form = document.querySelector("form")!;
+const date = document.querySelector("input")!;
+const status = document.querySelector("#status")!;
+const charts = document.querySelector("#charts")!;
+const localDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+date.value = localDate.toISOString().slice(0, 10);
 
-// Placeholder for battery percentage update logic
-function updateBatteryPercentage(percentage: number) {
-  const batteryPercentageElement =
-    document.getElementById("battery-percentage");
-  if (batteryPercentageElement) {
-    batteryPercentageElement.innerText = percentage + "%";
-  }
+type Sample = { minute: number; values: Record<string, number> };
 
-  const batteryLevelGroup = document.getElementById("battery-level");
-  if (batteryLevelGroup) {
-    const rectangles = batteryLevelGroup.getElementsByTagName("rect");
-    const numRectangles = rectangles.length;
-    const filledRectangles = Math.round(percentage / (100 / numRectangles));
-
-    for (let i = 0; i < numRectangles; i++) {
-      if (i < filledRectangles) {
-        rectangles[i].setAttribute("width", "8");
-      } else {
-        rectangles[i].setAttribute("width", "0");
-      }
-    }
-  }
-}
-type myDataSet = {
-  label: string;
-  backgroundColor: string;
-  borderColor: string;
-  data: any[];
-  yAxisID: string;
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-  const currentMonthDisplay = document.getElementById("current-month-display");
-
-  const chartCanvas = document.getElementById("myChart") as HTMLCanvasElement;
-  if (chartCanvas === null) {
-    console.error("Chart canvas not found!");
-    return;
-  }
-  let myChart: Chart; // To store chart instance for later updates/destruction
-  async function fetchCsvData(): Promise<string | null> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0"); // Month is 0-indexed
-    const filename = `${year}-${month}.csv`;
-    const csvUrl = `/data/${filename}`; // Matches your ESP32 endpoint
-    if (currentMonthDisplay != null) {
-      currentMonthDisplay.textContent = `${year}-${month}`;
-    }
-    console.log(`Fetching CSV from: ${csvUrl}`);
-    try {
-      const response = await fetch(csvUrl);
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`Log file not found for ${filename}.`);
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const csvText = await response.text();
-      console.log("CSV data fetched successfully.");
-      return csvText;
-    } catch (error) {
-      console.error("Could not fetch CSV data:", error);
-      alert(
-        `Failed to load data: ${error}. Please ensure the ESP32 is running and the file exists.`,
-      );
-      return null;
-    }
-  }
-
-  function InitChart() {
-    if (myChart) {
-      myChart.destroy(); // Destroy previous chart instance if it exists
-    }
-    if (chartCanvas === null) {
-      console.error("Chart canvas not found!");
-      return;
-    }
-    const config = {
-      type: "line",
-      data: {
-        datasets: [] as myDataSet[],
-      },
-      options: {
-        // parsing: false,
-        spanGaps: true,
-        animation: false,
-        responsive: true,
-        datasets: {
-          line: {
-            pointRadius: 0, // disable for all `'line'` datasets
-          },
-        },
-        stacked: false,
-        plugins: {
-          legend: {
-            position: "bottom",
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            onClick: function (event: any, legendItem: any, legend: any) {
-              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-              // @ts-ignore
-              const ci = this.chart;
-
-              ci.data.datasets.forEach(function (e: any, i: any) {
-                var meta = ci.getDatasetMeta(i);
-
-                if (i === legendItem.datasetIndex) {
-                  meta.hidden = !meta.hidden;
-                  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                  // @ts-ignore
-                  myChart.config.options.scales[e.yAxisID].display =
-                    !meta.hidden;
-                }
-              });
-
-              ci.update();
-            },
-          },
-          // title: {
-          //     display: false,
-          //     text: 'Industrial Plankton Log Viewer'
-          // },
-          zoom: {
-            limits: {
-              // y: { min: 'original', max: 'original' },
-              y: { min: 0 },
-            },
-            pan: {
-              enabled: true,
-              mode: "xy",
-              scaleMode: "xy",
-            },
-            zoom: {
-              wheel: {
-                enabled: true,
-              },
-              pinch: {
-                enabled: true,
-              },
-              mode: "xy",
-              scaleMode: "xy",
-            },
-          },
-        },
-        scales: {
-          x: {
-            display: true,
-            position: "bottom",
-            type: "time",
-            ticks: {
-              source: "auto",
-              autoSkip: true,
-              autoSkipPadding: 50,
-              maxRotation: 0,
-              major: {
-                enabled: true,
-              },
-            },
-            time: {
-              displayFormats: {
-                hour: "HH:mm",
-                minute: "HH:mm",
-                second: "HH:mm:ss",
-              },
-            },
-          },
-        },
-      },
-    };
-
-    myChart = new Chart(chartCanvas, config as any);
-  }
-  // Initial data load and chart render
-  fetchCsvData().then((data) => {
-    if (data != null) {
-      InitChart();
-      ParseLogs(data, myChart);
-    } else {
-      console.warn("No data to render chart.");
-    }
-  });
-  // Optional: Auto-reload data periodically if logs are updated frequently
-  // setInterval(() => {
-  //     fetchCsvData().then(data => {
-  //         if (data && data.labels.length > 0) {
-  //             renderChart(data);
-  //         }
-  //     });
-  // }, 60000); // Reload every minute
-});
-
-// Example:  Assuming you have a function to fetch the battery percentage
-async function getBatteryPercentage(): Promise<number> {
-  return Math.floor(Math.random() * 100); // Mock data
-}
-
-async function updateBatteryDisplay() {
-  const batteryPercentage = await getBatteryPercentage();
-  updateBatteryPercentage(batteryPercentage);
-}
-
-// Call updateBatteryDisplay initially and then periodically
-updateBatteryDisplay();
-setInterval(updateBatteryDisplay, 5000); // Update every 5 seconds
-
-function ParseLogs(rawCSV: string, chart: Chart) {
-  let dataLines = rawCSV
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .filter((line) => !line.startsWith("Event:"))
-    .filter((line) => !line.startsWith("Culture"))
-    .filter((line) => !line.startsWith("IP"))
-    .map((line) => line.replaceAll("\t", ","));
-
-  const HeaderLineString = dataLines.shift();
-  if (HeaderLineString == null) {
-    console.error("Header line not found!");
-    return;
-  }
-  const HeaderLine = HeaderLineString.trim().toLowerCase().split(",");
-
-  let data = dataLines
-    .filter((line) => {
-      // Filter out weekly restarts, and weird dates (< 2000)
-      const TimeStamp = new Date(line.split(",")[0]);
-      return (
-        TimeStamp.getTime() > 0 &&
-        !(
-          ((TimeStamp.getHours() == 2 &&
-            (TimeStamp.getMinutes() == 0 ||
-              TimeStamp.getMinutes() == 1 ||
-              TimeStamp.getMinutes() == 2)) ||
-            (TimeStamp.getHours() == 1 && TimeStamp.getMinutes() == 59)) &&
-          line.includes("0,0,0,0,0,0,0")
-        )
-      );
-    })
-    .map((line) => line.trim().toLowerCase().split(","));
-
-  function newDataSet(label: string, color: string, yAxis: string): myDataSet {
-    return {
-      label: label,
-      backgroundColor: color,
-      borderColor: color,
-      data: [] as any[],
-      yAxisID: yAxis,
-    };
-  }
-
-  function DecimateData(array: Point[]): Point[] {
-    let newArray = [array[0], array[1]];
-    let tempArray = [array[0]];
-
-    for (let i = 1; i < array.length - 1; i++) { // skip first and last
-      if (array[i - 1].y != array[i].y || array[i].y != array[i + 1].y) {
-        tempArray.push(array[i]);
-      }
-    }
-    tempArray.push(array[array.length - 1]); // add skipped last one for next processing step
-
-    const decimationCount = Math.round(tempArray.length / 20000) + 1
-    for (let i = 1; i < tempArray.length - 1; i++) {// skip first and last
-      if ((Math.abs(tempArray[i].y - tempArray[i + 1].y) > Math.abs(tempArray[i].y / 100))
-        || (Math.abs(tempArray[i - 1].y - tempArray[i].y) > Math.abs(tempArray[i].y / 100))
-        || i % decimationCount == 0
-      ) {
-        newArray.push(tempArray[i]);
-      }
-    }
-
-    newArray.push(array[array.length - 1]); // add skipped last one
-    return newArray
-  }
-
-  let newDatasets = [] as myDataSet[];
-  let availibleColors = [
-    "yellow",
-    "red",
-    "cyan",
-    "darkorange",
-    "cornflowerblue",
-    "lime",
-    "magenta",
-    "whitesmoke",
-    "steelblue",
-    "lightsteelblue",
-  ];
-  for (let index = 1; index < HeaderLine.length; index++) {
-    // not a standard dataset
-    const DataColor =
-      availibleColors.length > 0
-        ? (availibleColors.pop() as string)
-        : "rgb(" +
-        Math.round(Math.random() * 255) +
-        "," +
-        Math.round(Math.random() * 255) +
-        "," +
-        Math.round(Math.random() * 255) +
-        ")";
-    newDatasets.push(
-      newDataSet(
-        HeaderLine[index],
-        DataColor,
-        HeaderLine[index].substring(0, 5),
-      ),
-    );
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    chart.config.options[HeaderLine[index].substring(0, 5)] = {
-      display: true,
-      position: "right",
-      ticks: { color: DataColor, maxRotation: 0 },
-      grid: { drawOnChartArea: false },
-    };
-
-    data.forEach((line, _) => {
-      newDatasets[newDatasets.length - 1].data.push({
-        x: Date.parse(line[0]),
-        y: Number(line[index].replace(/[^0-9.]/g, "")),
-      });
+function parse(text: string, day: string): Sample[] {
+  const [header, ...lines] = text.trimEnd().split(/\r?\n/);
+  const fields = header.split(",");
+  return lines.flatMap(line => {
+    const columns = line.split(",");
+    // Older firmware used an RTC timestamp with an embedded weekday comma.
+    const oldStamp = /^[A-Za-z]{3}$/.test(columns[0]) && columns.length >= 5;
+    const stamp = oldStamp ? columns.slice(0, 2).join(",") : columns[0];
+    const cells = columns.slice(oldStamp ? 2 : 1);
+    const sampleDay = oldStamp
+      ? stamp.replace(/^[A-Za-z]{3}, ([A-Za-z]{3}) (\d\d) (\d{4}).*$/, (_, month, day, year) => {
+          const monthIndex = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ").indexOf(month);
+          return year + "-" + String(monthIndex + 1).padStart(2, "0") + "-" + day;
+        })
+      : stamp;
+    if (stamp.length > 8 && !sampleDay.startsWith(day)) return [];
+    const time = /(\d\d):(\d\d):(\d\d)$/.exec(stamp);
+    if (!time) return [];
+    const minute = +time[1] * 60 + +time[2] + +time[3] / 60;
+    const values: Record<string, number> = {};
+    cells.forEach((cell, index) => {
+      const field = fields[index + 1];
+      const key = ({ temp1: "T1", temp2: "T2", temp3: "T3", Temperature: "T1" } as Record<string, string>)[field] ?? field;
+      if (key && cell.trim() && Number.isFinite(+cell) && !(key.startsWith("T") && +cell === -127))
+        values[key] = +cell;
     });
-
-    if (chart.config.options?.scales?.x != null) {
-      chart.config.options.scales.x.min = newDatasets[0].data[0].x;
-      chart.config.options.scales.x.max =
-        newDatasets[0].data[newDatasets[0].data.length - 1].x;
-    }
-  }
-
-  for (let set of newDatasets) {
-    set.data = DecimateData(set.data);
-    chart.config.data.datasets.push(set as any);
-  }
-
-  chart.update();
+    return [{ minute, values }];
+  }).sort((a, b) => a.minute - b.minute);
 }
+
+function draw(group: typeof groups[number], samples: Sample[]) {
+  const [title, unit, fields, labels, scale, stepped] = group;
+  const section = document.createElement("section");
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  const legend = document.createElement("p");
+  legend.className = "legend";
+  section.append(heading, legend);
+  charts.append(section);
+  const points = fields.map(field => samples.map(sample => Number.isFinite(sample.values[field]) ? sample.values[field] * scale : NaN));
+  const values = points.flat().filter(Number.isFinite);
+  if (!values.length) {
+    legend.textContent = "No readings for this date";
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.setAttribute("aria-label", title + " by time of day");
+  section.append(canvas);
+  const ctx = canvas.getContext("2d")!;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const padding = max === min ? (stepped ? 1 : Math.max(.1, Math.abs(max) * .03)) : (max - min) * .08;
+  function show(index: number) {
+    legend.replaceChildren();
+    fields.forEach((_, series) => {
+      const item = document.createElement("span");
+      item.style.color = colors[series];
+      const value = points[series][index];
+      item.textContent = labels[series] + " " + (Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 3 }) + " " + unit : "--");
+      legend.append(item);
+    });
+  }
+  const render = () => {
+    if (!canvas.isConnected) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    ctx.scale(ratio, ratio);
+    const left = 46, top = 10, bottom = height - 24, right = width - 16;
+    const x = (minute: number) => left + minute / 1440 * (right - left);
+    const y = (value: number) => bottom - (value - min + padding) / (max - min + 2 * padding) * (bottom - top);
+    ctx.font = "11px system-ui";
+    ctx.fillStyle = "#a3b2c2";
+    ctx.strokeStyle = "#324153";
+    for (let tick = 0; tick <= 4; tick++) {
+      const level = min - padding + (max - min + 2 * padding) * tick / 4;
+      ctx.fillText(Number(level.toPrecision(3)).toString(), 0, y(level) + 4);
+      ctx.beginPath(); ctx.moveTo(left, y(level)); ctx.lineTo(right, y(level)); ctx.stroke();
+      ctx.fillText(String(tick * 6).padStart(2, "0") + ":00", x(tick * 360) - 15, height - 5);
+    }
+    points.forEach((series, line) => {
+      ctx.strokeStyle = ctx.fillStyle = colors[line];
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let previous = -1;
+      series.forEach((value, index) => {
+        if (!Number.isFinite(value)) { previous = -1; return; }
+        const at = x(samples[index].minute);
+        if (previous < 0 || samples[index].minute - samples[previous].minute > 21) ctx.moveTo(at, y(value));
+        else {
+          if (stepped) ctx.lineTo(at, y(series[previous]));
+          ctx.lineTo(at, y(value));
+        }
+        ctx.fillRect(at - 1, y(value) - 1, 2, 2);
+        previous = index;
+      });
+      ctx.stroke();
+    });
+  };
+  observer.observe(canvas);
+  redraw.set(canvas, render);
+  canvas.onpointermove = event => {
+    const minute = (event.offsetX - 46) / (canvas.clientWidth - 62) * 1440;
+    const nearest = samples.reduce((best, sample, index) => Math.abs(sample.minute - minute) < Math.abs(samples[best].minute - minute) ? index : best, 0);
+    show(nearest);
+    const time = samples[nearest].minute;
+    legend.append("  " + String(Math.floor(time / 60)).padStart(2, "0") + ":" + String(Math.floor(time % 60)).padStart(2, "0"));
+  };
+  canvas.onpointerleave = () => show(samples.length - 1);
+  show(samples.length - 1);
+}
+
+const redraw = new Map<Element, () => void>();
+const observer = new ResizeObserver(entries => entries.forEach(entry => redraw.get(entry.target)?.()));
+let controller: AbortController | undefined;
+let legacy: { month: string; text: string } | undefined;
+
+async function load() {
+  const day = date.value;
+  if (!day) return;
+  controller?.abort();
+  const request = controller = new AbortController();
+  observer.disconnect();
+  redraw.clear();
+  charts.replaceChildren();
+  status.textContent = "Loading " + day + "...";
+  try {
+    const options = { signal: request.signal };
+    const response = await fetch("./data/" + day + ".csv", options);
+    let text = "";
+    if (response.ok) text = await response.text();
+    else if (response.status === 404) {
+      const month = day.slice(0, 7);
+      if (legacy?.month === month) text = legacy.text;
+      else {
+        const monthly = await fetch("./data/" + month + ".csv", options);
+        if (monthly.ok) {
+          text = await monthly.text();
+          legacy = { month, text };
+        } else if (monthly.status !== 404) throw new Error(String(monthly.status));
+      }
+    } else throw new Error(String(response.status));
+    if (request.signal.aborted) return;
+    const samples = parse(text, day);
+    status.textContent = samples.length ? day + " / " + samples.length + " samples" : "No samples for " + day;
+    if (samples.length) groups.forEach(group => draw(group, samples));
+  } catch {
+    if (!request.signal.aborted) status.textContent = "Could not read the log for " + day + ".";
+  }
+}
+
+form.onsubmit = event => { event.preventDefault(); void load(); };
+const epoch = String(Math.floor(localDate.getTime() / 1000));
+void fetch("./api/setTime", { method: "POST", body: new URLSearchParams({ epoch }) })
+  .catch(() => undefined).then(load);

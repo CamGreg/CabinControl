@@ -32,13 +32,24 @@ enum class VEDirectResponses
 
 enum VeDirectHexRegister : uint16_t
 {
+    chargerState = 0x0201,
+    chargerError = 0xEDDA,
     chargeCurrent = 0xEDD7,
     chargeVoltage = 0xEDD5,
+    batteryCurrent = 0xED8F,
+    batteryVoltage = 0xED8D,
+    userYield = 0xEDDC,
+    yieldToday = 0xEDD3,
+    peakToday = 0xEDD2,
+    yieldYesterday = 0xEDD1,
+    peakYesterday = 0xEDD0,
     panelPower = 0xEDBC,
     panelVoltage = 0xEDBB,
     panelCurrent = 0xEDBD,
+    trackerMode = 0xEDB3,
     loadCurrent = 0xEDAD,
     loadVoltage = 0xEDA9,
+    loadState = 0xEDA8,
     batteryMaximumCurrent = 0xEDF0,
 };
 

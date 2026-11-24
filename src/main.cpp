@@ -27,7 +27,7 @@ bool gzipFile(const char *input_path, const char *output_path);
 // #include <Adafruit_SSD1306.h>
 #include <GxEPD2_BW.h>
 
-#include <VEDirectHex.h>
+#include <VictronTelemetry.h>
 const auto testing = true;
 
 const auto SCREEN_WIDTH = 128; // OLED display width, in pixels
@@ -79,6 +79,8 @@ void setup()
     pinMode(OneWire_Power_GPIO, OUTPUT);
     pinMode(ChargeCtrl_Select1_GPIO, OUTPUT);
     pinMode(ChargeCtrl_Select2_GPIO, OUTPUT);
+    digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
+    digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
 
     // serial
     Serial.begin(19200, SERIAL_8N1); // Dedicated to VE.Direct frames
@@ -117,29 +119,32 @@ void loop()
         WiFi.setHostname("Cabin Control");
         WiFi.softAPIP();
 
-        if (SD.begin(SD_CS, SPI, 20000000) && SD.cardType() != CARD_NONE)
-        {
-            server.serveStatic("/", SD, "/").setDefaultFile("index.html").setCacheControl(("public, max-age=" + String(60 * 60 * 24 * 7) /*7 days*/).c_str()); // serve static files from SD card. gzip is supported, so .gz all the things!
-            server.serveStatic("/data/", SD, "/data/").setCacheControl(("public, max-age=" + String(60 * 60 * 3) /*3 hours*/).c_str());
-        }
+        SD.begin(SD_CS, SPI, 20000000);
+        server.serveStatic("/data/", SD, "/data/").setCacheControl("no-cache");
+        server.serveStatic("/", SD, "/").setDefaultFile("index.html").setCacheControl("no-cache");
+
         server.on("/api/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send(200, "text/plain", "hello"); });
         server.on("/api/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
                   { request->send(200, "text/plain", "there"); });
         server.on("/api/setTime", HTTP_POST, [](AsyncWebServerRequest *request)
                   {
-            // TODO use params to set date and time
-
-            String who;
-            if (request->hasParam("who", true))
+            if (!request->hasParam("epoch", true))
             {
-                who = request->getParam("who", true)->value();
+                request->send(400);
+                return;
             }
-            else
+            const String epoch = request->getParam("epoch", true)->value();
+            char *end;
+            const unsigned long seconds = strtoul(epoch.c_str(), &end, 10);
+            if (epoch.length() != 10 || *end || seconds < 1704067200UL || seconds > INT32_MAX)
             {
-                who = "No message sent";
+                request->send(400);
+                return;
             }
-            request->send(200, "text/plain", "Time Set"); });
+            if (rtc.getEpoch() < 1704067200UL)
+                rtc.setTime(seconds);
+            request->send(204); });
 
         server.begin();
     }
@@ -152,6 +157,7 @@ void loop()
 
         // Temperature
         digitalWrite(OneWire_Power_GPIO, HIGH);
+        sensors.begin();
         sensors.requestTemperatures();
         float temperature1 = sensors.getTempCByIndex(0);
         float temperature2 = sensors.getTempCByIndex(1);
@@ -159,81 +165,58 @@ void loop()
         // float temperature4 = sensors.getTempCByIndex(3);
         // float temperature5 = sensors.getTempCByIndex(4);
         digitalWrite(OneWire_Power_GPIO, LOW);
-        // TODO save values
-
-        const auto interCharTimout = 10; // uS
-        // Charge controller stats
-        digitalWrite(ChargeCtrl_Select1_GPIO, HIGH);
-        // Read charge controller1 information
-        // Serial.write():
-        // TODO: group update commands into a updateAll function
-        auto loadCurrent = GetValue(Serial, VeDirectHexRegister::loadCurrent, valueSize::_16);
-        auto solarCurrent = GetValue(Serial, VeDirectHexRegister::chargeCurrent, valueSize::_16);
-
-        digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
-        digitalWrite(ChargeCtrl_Select2_GPIO, HIGH);
-        // Read charge controller2 information
-        // Serial.write();
+        int64_t victron[victronCount];
         digitalWrite(ChargeCtrl_Select2_GPIO, LOW);
-
-        // TODO: get current off shunt sensor for AC load/generator
+        digitalWrite(ChargeCtrl_Select1_GPIO, HIGH);
+        pollVictron(Serial, victron);
+        digitalWrite(ChargeCtrl_Select1_GPIO, LOW);
 
         if (SD.begin(SD_CS, SPI, 20000000) && SD.cardType() != CARD_NONE)
         {
-            { // Compress data files. TODO check this works
-                auto timeData = rtc.getTimeStruct();
-                timeData.tm_mon--;
-                mktime(&timeData);
-                char newDateBuffer[32];
-                String fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv.gz");
-                if (SD.exists(fileName))
+            const auto sampleTime = rtc.getTimeStruct();
+            char path[32];
+            char clock[9];
+            strftime(path, sizeof(path), "/data/%Y-%m-%d.csv", &sampleTime);
+            strftime(clock, sizeof(clock), "%H:%M:%S", &sampleTime);
+            if (!SD.exists("/data"))
+                SD.mkdir("/data");
+            File log = SD.open(path, FILE_APPEND);
+            if (log)
+            {
+                String row;
+                row.reserve(256);
+                if (log.size() == 0)
                 {
-                    if (gzipFile(fileName.c_str(), (fileName + ".gz").c_str()))
+                    row = "Time,T1,T2,T3";
+                    for (const auto field : victronFields)
                     {
-                        SD.remove(fileName);
+                        row += ',';
+                        row += field.column;
+                    }
+                    row += '\n';
+                }
+                row += clock;
+                for (const float temperature : {temperature1, temperature2, temperature3})
+                {
+                    row += ',';
+                    if (temperature != DEVICE_DISCONNECTED_C && isfinite(temperature))
+                        row += String(temperature, 1);
+                }
+                for (size_t i = 0; i < victronCount; ++i)
+                {
+                    row += ',';
+                    const auto value = victron[i];
+                    if (value != missingVictron)
+                    {
+                        if (victronFields[i].address == panelPower)
+                            row += String(value / 100.0, 2);
+                        else
+                            row += String(value);
                     }
                 }
+                row += '\n';
+                log.print(row);
             }
-            if (SD.usedBytes() > SD.totalBytes() * .9) // housekeeping, delete "oldest" file
-            {
-                auto timeData = rtc.getTimeStruct();
-                char newDateBuffer[32];
-                String fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv.gz");
-
-                int limiter = 2000; // ~6 years
-                while (SD.exists(fileName) && limiter--)
-                {
-                    timeData.tm_mon--;
-                    mktime(&timeData);                                                  // normalizes time data so day rolls over
-                    strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
-
-                    fileName = "/data/";
-                    fileName += newDateBuffer;
-                    fileName += ".csv.gz";
-                }
-                timeData.tm_mon++;
-                mktime(&timeData);                                                  // normalizes time data so day rolls over
-                strftime(newDateBuffer, sizeof(newDateBuffer), "%Y-%m", &timeData); // formats date into buffer
-
-                fileName = "/data/";
-                fileName += newDateBuffer;
-                fileName += ".csv.gz";
-
-                if (SD.exists(fileName))
-                {
-                    SD.remove(fileName);
-                }
-            }
-
-            auto fileName = ("/data/" + rtc.getTime("%Y-%m") + ".csv").c_str();
-            if (SD.exists(fileName))
-            {
-                writeFile(SD, fileName, "Time,temp1,temp2,ect\n"); // TODO finish header
-            }
-
-            auto line = rtc.getDateTime() + "," + String(temperature1, 0) + "," + String(temperature2, 0) + "," + String(temperature3, 0) + "\n";
-            appendFile(SD, fileName, line.c_str());
-            SD.end();
         }
     }
 
