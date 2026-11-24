@@ -1,0 +1,11 @@
+{
+  "lsp": {
+    "clangd": {
+      "binary": {
+        "arguments": [
+          "--query-driver=**/toolchain-riscv32-esp/bin/riscv32-esp-elf-*"
+        ]
+      }
+    }
+  }
+}
